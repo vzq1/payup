@@ -26,12 +26,14 @@ function loadState() {
       return { receiptTotal: saved.receiptTotal || "", people: saved.people, items: saved.items };
     }
   } catch (e) {}
+  if (window.PAYUP_SAMPLE) return { ...JSON.parse(JSON.stringify(window.PAYUP_SAMPLE)), sample: true };
   return defaultState();
 }
 
 let state = loadState();
 
 function persist() {
+  delete state.sample;
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {}
@@ -123,7 +125,8 @@ function renderSummary(result) {
   $("#rate").textContent = result.hasReceipt ? `${result.rate >= 0 ? "+" : "−"}${pct(Math.abs(result.rate))}` : "";
 
   let hint = "";
-  if (state.people.length === 0 && state.items.length === 0) hint = "Add people and items below, then the receipt total.";
+  if (state.sample) hint = "Sample bill. Tap New to start your own.";
+  else if (state.people.length === 0 && state.items.length === 0) hint = "Add people and items below, then the receipt total.";
   else if (!result.hasReceipt && result.itemsTotal > 0) hint = "Add the receipt total to share out the service charge.";
   $("#summary-hint").textContent = hint;
 }
@@ -227,15 +230,26 @@ function addPerson(name) {
 function removePerson(id) {
   const person = state.people.find((p) => p.id === id);
   const used = state.items.some((i) => i.people.includes(id));
-  if (used && !confirm(`Remove ${person.name}? Their items will need to be reassigned.`)) return;
-  state.people = state.people.filter((p) => p.id !== id);
-  for (const item of state.items) {
-    item.people = item.people.filter((pid) => pid !== id);
-    delete item.shares[id];
+  const remove = () => {
+    state.people = state.people.filter((p) => p.id !== id);
+    for (const item of state.items) {
+      item.people = item.people.filter((pid) => pid !== id);
+      delete item.shares[id];
+    }
+    persist();
+    renderMain();
+    closeSheet();
+  };
+  if (!used) {
+    remove();
+    return;
   }
-  persist();
-  renderMain();
-  closeSheet();
+  confirmAction({
+    title: `Remove ${person.name}?`,
+    message: `${person.name}'s items will need to be assigned to someone else.`,
+    confirmLabel: `Remove ${person.name}`,
+    onConfirm: remove,
+  });
 }
 
 /* ---------- Bottom sheet ---------- */
@@ -279,6 +293,18 @@ function closeSheet() {
     scrim.hidden = true;
     $("#sheet-body").replaceChildren();
   }, 300);
+}
+
+function confirmAction({ title, message, confirmLabel, onConfirm }) {
+  openSheet({
+    title,
+    left: { label: "Cancel", onClick: closeSheet },
+    right: null,
+    body: [
+      el("p", { class: "confirm-text", text: message }),
+      el("button", { type: "button", class: "btn btn-alarm", text: confirmLabel, onclick: onConfirm }),
+    ],
+  });
 }
 
 scrim.addEventListener("click", closeSheet);
@@ -523,7 +549,8 @@ async function share() {
     return;
   }
   const text = summaryText();
-  if (navigator.share) {
+  const framed = window.self !== window.top;
+  if (navigator.share && !framed) {
     try {
       await navigator.share({ text });
       return;
@@ -535,8 +562,23 @@ async function share() {
     await navigator.clipboard.writeText(text);
     toast("Copied. Paste it in your group chat");
   } catch (e) {
-    toast("Couldn't copy the split");
+    showSplitText(text);
   }
+}
+
+function showSplitText(text) {
+  const area = el("textarea", {
+    id: "split-text", class: "copy-area", readonly: "",
+    rows: String(text.split("\n").length), "aria-label": "Split text",
+  });
+  area.value = text;
+  openSheet({
+    title: "Copy split",
+    left: null,
+    right: { label: "Done", onClick: closeSheet },
+    body: [el("p", { class: "note", text: "Select the text below and copy it into your group chat." }), area],
+  });
+  area.select();
 }
 
 let toastTimer;
@@ -563,8 +605,10 @@ function applyTheme() {
   const dark = theme === "dark";
   if (dark) document.documentElement.dataset.mode = "dark";
   else delete document.documentElement.dataset.mode;
-  document.querySelector('meta[name="theme-color"]').content = dark ? "#0E0E0E" : "#FFFFFF";
-  document.querySelector('meta[name="color-scheme"]').content = dark ? "dark" : "light";
+  const themeMeta = document.querySelector('meta[name="theme-color"]');
+  const schemeMeta = document.querySelector('meta[name="color-scheme"]');
+  if (themeMeta) themeMeta.content = dark ? "#0E0E0E" : "#FFFFFF";
+  if (schemeMeta) schemeMeta.content = dark ? "dark" : "light";
   $("#theme-btn").setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
 }
 
@@ -593,11 +637,18 @@ $("#gcash-btn").addEventListener("click", () => openQrSheet());
 
 $("#new-bill").addEventListener("click", () => {
   if (state.items.length === 0 && state.people.length === 0 && !state.receiptTotal) return;
-  if (!confirm("Start a new bill? This clears everyone and all items.")) return;
-  state = defaultState();
-  receiptInput.value = "";
-  persist();
-  renderMain();
+  confirmAction({
+    title: "New bill",
+    message: "This clears everyone, all items and the receipt total.",
+    confirmLabel: "Clear bill",
+    onConfirm: () => {
+      state = defaultState();
+      receiptInput.value = "";
+      persist();
+      renderMain();
+      closeSheet();
+    },
+  });
 });
 
 renderMain();

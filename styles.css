@@ -12,6 +12,7 @@
   --danger: #D92D20;
   --scrim: rgba(0, 0, 0, .28);
   --sheet: #FFFFFF;
+  --on-danger: #FFFFFF;
 }
 
 :root[data-mode="dark"] {
@@ -28,6 +29,7 @@
   --danger: #FF6B5E;
   --scrim: rgba(0, 0, 0, .6);
   --sheet: #171717;
+  --on-danger: #0E0E0E;
 }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
@@ -108,6 +110,12 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 .btn-solid { background: var(--solid); color: var(--on-solid); }
 .btn-outline { border: 1px solid var(--line-strong); }
 .btn-danger { color: var(--danger); font-weight: 500; }
+.btn-alarm { background: var(--danger); color: var(--on-danger); }
+.confirm-text { margin: 0; font-size: 15px; color: var(--muted); }
+.copy-area {
+  width: 100%; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 12px;
+  background: transparent; color: var(--text); font: inherit; font-size: 15px; line-height: 1.5; resize: none;
+}
 
 /* ---------- Lists ---------- */
 .section-head {
