@@ -1,4 +1,4 @@
-# EZBill
+# PayUp
 
 Bon's bill splitting app: a minimalist calculator for splitting a restaurant bill with friends. Add who ordered what, type in the total on the receipt, and it shares out the service charge by how much each person ordered, then shows Bon's GCash QR so everyone can pay.
 
@@ -25,7 +25,7 @@ Everyone's shares add up exactly to the receipt total, so you never need to know
 
 ## Using it on iPhone
 
-Open https://vzq1.github.io/ezbill/ in Safari, tap **Share → Add to Home Screen**, and name it **EZBill**. It works offline after the first visit.
+Open https://vzq1.github.io/payup/ in Safari, tap **Share → Add to Home Screen**, and name it **PayUp**. It works offline after the first visit.
 
 Tap the half-circle at the top right for dark mode. The GCash QR always stays black on white so it scans.
 
