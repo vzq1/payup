@@ -600,8 +600,8 @@ function paintSplit(ctx) {
   for (const r of result.rows) {
     text(r.name, pad, y + 62, 40, 500);
     text(peso.format(r.total), W - pad, y + 62, 40, 600, ink, "right");
-    const sub = result.hasReceipt ? `Food ${peso.format(r.food)} · Service ${peso.format(r.extra)}` : `Food ${peso.format(r.food)}`;
-    text(sub, pad, y + 104, 28, 400, muted);
+    const charge = result.hasReceipt ? peso.format(r.extra) : "not added yet";
+    text(`Food ${peso.format(r.food)} · Service charge ${charge}`, pad, y + 104, 28, 400, muted);
     y += 132;
     line(y);
   }
@@ -609,12 +609,15 @@ function paintSplit(ctx) {
   y += 28;
   const total = (label, value, strong = false) => {
     text(label, pad, y + 44, strong ? 36 : 30, strong ? 700 : 400, strong ? ink : muted);
-    text(peso.format(value), W - pad, y + 44, strong ? 36 : 30, strong ? 700 : 500, ink, "right");
+    const shown = typeof value === "number" ? peso.format(value) : value;
+    text(shown, W - pad, y + 44, strong ? 36 : 30, strong ? 700 : 500, typeof value === "number" ? ink : muted, "right");
     y += 62;
   };
   total("Food", result.itemsTotal);
   if (result.hasReceipt) {
     total(`Service charge (${result.rate >= 0 ? "+" : "−"}${pct(Math.abs(result.rate))})`, result.extra);
+  } else {
+    total("Service charge", "Not added yet");
   }
   total("Total", result.billTotal, true);
 
