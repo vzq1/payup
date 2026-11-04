@@ -1,55 +1,24 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- A strip of receipt paper folded into a P, shaded to look like real paper.
-       Canvas is 512 x 512; x goes right, y goes down. -->
-  <defs>
-    <!-- Back of the paper: lit from the top right, falling into shade underneath -->
-    <linearGradient id="back" x1="0.85" y1="0.05" x2="0.2" y2="1">
-      <stop offset="0" stop-color="#C9C9C9"/>
-      <stop offset="0.55" stop-color="#9C9C9C"/>
-      <stop offset="1" stop-color="#6F6F6F"/>
-    </linearGradient>
-    <!-- Shade just past the fold, where the paper turns away -->
-    <linearGradient id="foldShade" gradientUnits="userSpaceOnUse" x1="298.0" y1="97.2" x2="332.0" y2="123.2">
-      <stop offset="0" stop-color="#000" stop-opacity="0.35"/>
-      <stop offset="1" stop-color="#000" stop-opacity="0"/>
-    </linearGradient>
-    <!-- Shadow the stem casts on the loop behind it -->
-    <linearGradient id="stemShadow" gradientUnits="userSpaceOnUse" x1="210" y1="0" x2="236" y2="0">
-      <stop offset="0" stop-color="#000" stop-opacity="0.45"/>
-      <stop offset="1" stop-color="#000" stop-opacity="0"/>
-    </linearGradient>
-    <!-- Front of the stem: rounded slightly, so the edges are a touch darker -->
-    <linearGradient id="stem" gradientUnits="userSpaceOnUse" x1="144" y1="0" x2="210" y2="0">
-      <stop offset="0" stop-color="#E4E4E4"/>
-      <stop offset="0.35" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#EDEDED"/>
-    </linearGradient>
-    <!-- Front of the curl: bright on top, dimming toward the fold -->
-    <linearGradient id="curl" gradientUnits="userSpaceOnUse" x1="177" y1="201" x2="298.0" y2="97.2">
-      <stop offset="0" stop-color="#000" stop-opacity="0"/>
-      <stop offset="0.6" stop-color="#000" stop-opacity="0.04"/>
-      <stop offset="1" stop-color="#000" stop-opacity="0.14"/>
-    </linearGradient>
-    <clipPath id="loopShape"><path d="M298.0 97.2 A112 112 0 1 1 144.0 201.0 L210.0 201.0 A46 46 0 1 0 246.4 156.0 Z"/></clipPath>
-  </defs>
+  <!-- Canvas is 512 x 512. x goes right, y goes down. -->
 
   <!-- Background square (iPhone rounds the corners for you) -->
   <rect width="512" height="512" fill="#111111"/>
 
-  <!-- Back of the paper (gray): the loop after the fold, going around and behind the stem -->
-  <path fill="url(#back)" d="M298.0 97.2 A112 112 0 1 1 144.0 201.0 L210.0 201.0 A46 46 0 1 0 246.4 156.0 Z"/>
-  <g clip-path="url(#loopShape)">
-    <rect x="0" y="0" width="512" height="512" fill="url(#foldShade)"/>
-    <rect x="210" y="0" width="30" height="512" fill="url(#stemShadow)"/>
+  <!-- Top of the P (white): flat left side and top, curved right side, with a D-shaped hole.
+       Outer: left x=95, top y=86, right x=417, bottom y=304. Hole: x=203 to 313, y=162 to 232. -->
+  <path fill="#FFFFFF" fill-rule="evenodd" d="M95 86 H320 A97 110 0 0 1 417 196 A322 108 0 0 1 95 304 Z
+           M203 162 H278 a35 35 0 0 1 0 70 H203 Z"/>
+
+  <!-- Leg of the P: a receipt (white) with a clean torn (zigzag) bottom. x=95 to 203, y=318 to 418 -->
+  <path fill="#FFFFFF" d="M95 318 H203 V418 L196.2 425 L189.5 418 L182.8 425 L176.0 418 L169.2 425 L162.5 418 L155.8 425 L149.0 418 L142.2 425 L135.5 418 L128.8 425 L122.0 418 L115.2 425 L108.5 418 L101.8 425 L95.0 418 Z"/>
+
+  <!-- Printed rows on the receipt (black): an item bar, a gap, then a price bar -->
+  <g fill="#111111">
+    <rect x="109" y="336" width="64" height="6"/>
+    <rect x="179" y="336" width="10" height="6"/>
+    <rect x="109" y="354" width="64" height="6"/>
+    <rect x="179" y="354" width="10" height="6"/>
+    <rect x="109" y="372" width="64" height="6"/>
+    <rect x="179" y="372" width="10" height="6"/>
   </g>
-
-  <!-- Front of the paper (white): the stem with a torn bottom edge -->
-  <path fill="url(#stem)" d="M144 200 H210 V423 L206.1 430 L201.4 424.5 L198.4 434 L194.8 424.5 L190.1 429 L184.3 424.5 L180.7 433 L176.3 424.5 L172.2 428 L167.1 424.5 L163.8 435 L159.8 424.5 L156.3 430 L151.9 424.5 L148.4 432 L144 423 Z"/>
-
-  <!-- Front of the paper (white): where it curls over the top, up to the slanted fold -->
-  <path fill="url(#stem)" d="M144.0 201.0 A112 112 0 0 1 298.0 97.2 L246.4 156.0 A46 46 0 0 0 210.0 201.0 Z"/>
-  <path fill="url(#curl)" d="M144.0 201.0 A112 112 0 0 1 298.0 97.2 L246.4 156.0 A46 46 0 0 0 210.0 201.0 Z"/>
-
-  <!-- The fold itself: a thin bright crease line -->
-  <line x1="298.0" y1="97.2" x2="246.4" y2="156.0" stroke="#FFFFFF" stroke-width="2" stroke-linecap="round"/>
 </svg>
