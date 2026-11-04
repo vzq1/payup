@@ -1,8 +1,16 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- A strip of receipt paper folded into a P. Canvas is 512 x 512; x goes right, y goes down. -->
+
   <!-- Background square (iPhone rounds the corners for you) -->
   <rect width="512" height="512" fill="#111111"/>
 
-  <!-- The letter P from Arial Bold, converted to a shape so it looks the same everywhere.
-       It is centered and 300 tall on the 512 x 512 canvas. -->
-  <path fill="#FFFFFF" transform="translate(110.60 406.00) scale(0.20464 -0.20464)" d="M149 0V1466H624Q894 1466 976 1444Q1102 1411 1187.0 1300.5Q1272 1190 1272 1015Q1272 880 1223.0 788.0Q1174 696 1098.5 643.5Q1023 591 945 574Q839 553 638 553H445V0ZM445 1218V802H607Q782 802 841.0 825.0Q900 848 933.5 897.0Q967 946 967 1011Q967 1091 920.0 1143.0Q873 1195 801 1208Q748 1218 588 1218Z"/>
+  <!-- Back of the paper (gray): the part of the loop after the fold, going around the right side
+       and under, back behind the stem. Loop center (256, 201), outer radius 112, inner radius 46. -->
+  <path fill="#9E9E9E" d="M294.3 95.8 A112 112 0 1 1 144.0 201.0 L210.0 201.0 A46 46 0 1 0 271.7 157.8 Z"/>
+
+  <!-- Front of the paper (white): the stem, 66 wide, with a torn bottom edge at y=423 -->
+  <path fill="#FFFFFF" d="M144 200 H210 V423 L204.5 431 L199.0 423 L193.5 431 L188.0 423 L182.5 431 L177.0 423 L171.5 431 L166.0 423 L160.5 431 L155.0 423 L149.5 431 L144.0 423 Z"/>
+
+  <!-- Front of the paper (white): where it curls over the top, up to the fold at 290 degrees -->
+  <path fill="#FFFFFF" d="M144.0 201.0 A112 112 0 0 1 294.3 95.8 L271.7 157.8 A46 46 0 0 0 210.0 201.0 Z"/>
 </svg>
