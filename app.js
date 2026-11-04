@@ -125,7 +125,7 @@ function renderSummary(result) {
   $("#rate").textContent = result.hasReceipt ? `${result.rate >= 0 ? "+" : "−"}${pct(Math.abs(result.rate))}` : "";
 
   let hint = "";
-  if (state.sample) hint = "Sample bill. Tap New to start your own.";
+  if (state.sample) hint = "Sample bill. Tap Clear all to start your own.";
   else if (state.people.length === 0 && state.items.length === 0) hint = "Add people and items below, then the receipt total.";
   else if (!result.hasReceipt && result.itemsTotal > 0) hint = "Add the receipt total to share out the service charge.";
   $("#summary-hint").textContent = hint;
@@ -566,6 +566,145 @@ async function share() {
   }
 }
 
+const qrImage = new Image();
+qrImage.src = GCASH.qr;
+
+function paintSplit(ctx) {
+  const result = computeSplit(state);
+  const W = 1080;
+  const pad = 72;
+  const font = '-apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Helvetica Neue", sans-serif';
+  const ink = "#111111";
+  const muted = "#6F6F6F";
+  const rule = "#E6E6E6";
+  const text = (str, x, y, size, weight = 400, color = ink, align = "left") => {
+    ctx.font = `${weight} ${size}px ${font}`;
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    ctx.fillText(str, x, y);
+  };
+  const line = (y) => {
+    ctx.fillStyle = rule;
+    ctx.fillRect(pad, y, W - pad * 2, 2);
+  };
+
+  ctx.fillStyle = "#FFFFFF";
+  ctx.fillRect(0, 0, W, ctx.canvas.height);
+
+  let y = pad;
+  text("PayUp", pad, y + 48, 52, 700);
+  text(new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }), W - pad, y + 48, 30, 400, muted, "right");
+  y += 96;
+  line(y);
+
+  for (const r of result.rows) {
+    text(r.name, pad, y + 62, 40, 500);
+    text(peso.format(r.total), W - pad, y + 62, 40, 600, ink, "right");
+    const sub = result.hasReceipt ? `Food ${peso.format(r.food)} · Service ${peso.format(r.extra)}` : `Food ${peso.format(r.food)}`;
+    text(sub, pad, y + 104, 28, 400, muted);
+    y += 132;
+    line(y);
+  }
+
+  y += 28;
+  const total = (label, value, strong = false) => {
+    text(label, pad, y + 44, strong ? 36 : 30, strong ? 700 : 400, strong ? ink : muted);
+    text(peso.format(value), W - pad, y + 44, strong ? 36 : 30, strong ? 700 : 500, ink, "right");
+    y += 62;
+  };
+  total("Food", result.itemsTotal);
+  if (result.hasReceipt) {
+    total(`Service charge (${result.rate >= 0 ? "+" : "−"}${pct(Math.abs(result.rate))})`, result.extra);
+  }
+  total("Total", result.billTotal, true);
+
+  if (qrImage.complete && qrImage.naturalWidth > 0) {
+    y += 64;
+    ctx.save();
+    ctx.font = `600 26px ${font}`;
+    if ("letterSpacing" in ctx) ctx.letterSpacing = "4px";
+    ctx.fillStyle = muted;
+    ctx.textAlign = "center";
+    ctx.fillText("PAY WITH GCASH", W / 2, y + 26);
+    ctx.restore();
+    y += 52;
+    const size = 560;
+    const x = (W - size) / 2;
+    ctx.fillStyle = rule;
+    ctx.fillRect(x - 2, y - 2, size + 4, size + 4);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(x, y, size, size);
+    ctx.imageSmoothingEnabled = false;
+    ctx.drawImage(qrImage, x, y, size, size);
+    y += size;
+    text(GCASH.name, W / 2, y + 60, 34, 700, ink, "center");
+    text(`Mobile ${GCASH.mobile}`, W / 2, y + 104, 26, 400, muted, "center");
+    text("Scan with GCash or any InstaPay app", W / 2, y + 144, 26, 400, muted, "center");
+    y += 144;
+  }
+  return y + pad;
+}
+
+function renderSplitImage() {
+  const probe = document.createElement("canvas");
+  probe.width = 1080;
+  probe.height = 1;
+  const height = Math.ceil(paintSplit(probe.getContext("2d")));
+  const canvas = document.createElement("canvas");
+  canvas.width = 1080;
+  canvas.height = height;
+  paintSplit(canvas.getContext("2d"));
+  return canvas;
+}
+
+function dataUrlToBlob(dataUrl) {
+  const bytes = atob(dataUrl.split(",")[1]);
+  const array = new Uint8Array(bytes.length);
+  for (let i = 0; i < bytes.length; i++) array[i] = bytes.charCodeAt(i);
+  return new Blob([array], { type: "image/png" });
+}
+
+async function saveImage() {
+  if (state.people.length === 0) {
+    toast("Add people and items first");
+    return;
+  }
+  const dataUrl = renderSplitImage().toDataURL("image/png");
+  const framed = window.self !== window.top;
+  if (!framed) {
+    const name = `payup-${new Date().toISOString().slice(0, 10)}.png`;
+    const blob = dataUrlToBlob(dataUrl);
+    const file = new File([blob], name, { type: "image/png" });
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file] });
+        return;
+      } catch (e) {
+        if (e.name === "AbortError") return;
+      }
+    }
+    const link = el("a", { href: URL.createObjectURL(blob), download: name });
+    document.body.append(link);
+    link.click();
+    link.remove();
+    toast("Image saved");
+    return;
+  }
+  showImage(dataUrl);
+}
+
+function showImage(dataUrl) {
+  openSheet({
+    title: "Save image",
+    left: null,
+    right: { label: "Done", onClick: closeSheet },
+    body: [
+      el("p", { class: "note", text: "Press and hold the image to save it to your photos. On a computer, right-click it and choose Save Image." }),
+      el("img", { id: "split-image", class: "saved-img", src: dataUrl, alt: "The split as an image, with the GCash QR" }),
+    ],
+  });
+}
+
 function showSplitText(text) {
   const area = el("textarea", {
     id: "split-text", class: "copy-area", readonly: "",
@@ -633,14 +772,15 @@ receiptInput.addEventListener("input", () => {
 });
 
 $("#share").addEventListener("click", share);
+$("#save-image").addEventListener("click", saveImage);
 $("#gcash-btn").addEventListener("click", () => openQrSheet());
 
 $("#new-bill").addEventListener("click", () => {
   if (state.items.length === 0 && state.people.length === 0 && !state.receiptTotal) return;
   confirmAction({
-    title: "New bill",
-    message: "This clears everyone, all items and the receipt total.",
-    confirmLabel: "Clear bill",
+    title: "Clear all",
+    message: "This removes everyone, all items and the receipt total.",
+    confirmLabel: "Clear everything",
     onConfirm: () => {
       state = defaultState();
       receiptInput.value = "";

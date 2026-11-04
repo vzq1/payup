@@ -99,7 +99,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 .hint:empty { display: none; }
 .hint.err { color: var(--danger); }
 
-.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 24px; }
+.actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 24px; }
 .btn {
   width: 100%; height: 48px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
@@ -112,6 +112,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 .btn-danger { color: var(--danger); font-weight: 500; }
 .btn-alarm { background: var(--danger); color: var(--on-danger); }
 .confirm-text { margin: 0; font-size: 15px; color: var(--muted); }
+.saved-img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; }
 .copy-area {
   width: 100%; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 12px;
   background: transparent; color: var(--text); font: inherit; font-size: 15px; line-height: 1.5; resize: none;
