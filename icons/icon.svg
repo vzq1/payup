@@ -4,21 +4,21 @@
   <!-- Background square (iPhone rounds the corners for you) -->
   <rect width="512" height="512" fill="#111111"/>
 
-  <!-- Top of the P (white): flat left side and top, curved right side, with a D-shaped hole.
-       Outer: left x=95, top y=86, right x=417, bottom y=304. Hole: x=203 to 313, y=162 to 232. -->
-  <path fill="#FFFFFF" fill-rule="evenodd" d="M95 86 H320 A97 110 0 0 1 417 196 A322 108 0 0 1 95 304 Z
-           M203 162 H278 a35 35 0 0 1 0 70 H203 Z"/>
+  <!-- Top of the P (white): flat left side and top, one round end of radius 105 on the right.
+       The hole uses the same center, so the P is 72 thick all the way around. -->
+  <path fill="#FFFFFF" fill-rule="evenodd" d="M132.5 87.5 H274.5 a105 105 0 0 1 0 210 H132.5 Z
+           M204.5 159.5 H274.5 a33 33 0 0 1 0 66 H204.5 Z"/>
 
-  <!-- Leg of the P: a receipt (white) with a clean torn (zigzag) bottom. x=95 to 203, y=318 to 418 -->
-  <path fill="#FFFFFF" d="M95 318 H203 V418 L196.2 425 L189.5 418 L182.8 425 L176.0 418 L169.2 425 L162.5 418 L155.8 425 L149.0 418 L142.2 425 L135.5 418 L128.8 425 L122.0 418 L115.2 425 L108.5 418 L101.8 425 L95.0 418 Z"/>
+  <!-- Stem of the P: a receipt (white), 72 wide like the rest of the P, with a clean torn (zigzag) bottom -->
+  <path fill="#FFFFFF" d="M132.5 309.5 H204.5 V417.5 L199.4 424.5 L194.2 417.5 L189.1 424.5 L183.9 417.5 L178.8 424.5 L173.6 417.5 L168.5 424.5 L163.4 417.5 L158.2 424.5 L153.1 417.5 L147.9 424.5 L142.8 417.5 L137.6 424.5 L132.5 417.5 Z"/>
 
   <!-- Printed rows on the receipt (black): an item bar, a gap, then a price bar -->
   <g fill="#111111">
-    <rect x="109" y="336" width="64" height="6"/>
-    <rect x="179" y="336" width="10" height="6"/>
-    <rect x="109" y="354" width="64" height="6"/>
-    <rect x="179" y="354" width="10" height="6"/>
-    <rect x="109" y="372" width="64" height="6"/>
-    <rect x="179" y="372" width="10" height="6"/>
+    <rect x="143.5" y="327.5" width="36" height="6"/>
+    <rect x="184.5" y="327.5" width="9" height="6"/>
+    <rect x="143.5" y="344.5" width="36" height="6"/>
+    <rect x="184.5" y="344.5" width="9" height="6"/>
+    <rect x="143.5" y="361.5" width="36" height="6"/>
+    <rect x="184.5" y="361.5" width="9" height="6"/>
   </g>
 </svg>
