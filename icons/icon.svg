@@ -1,12 +1,18 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <clipPath id="curve">
+      <circle cx="300" cy="204" r="64"/>
+      <rect x="230" y="120" width="70" height="170"/>
+    </clipPath>
+  </defs>
   <rect width="512" height="512" fill="#111111"/>
   <g transform="translate(-26 -6)" fill="#FFFFFF">
-    <path d="M164 104 H240 V398 L221 418 L202 398 L183 418 L164 398 Z"/>
+    <path d="M164 104 H240 V400 L235.2 408 L230.5 400 L225.8 408 L221.0 400 L216.2 408 L211.5 400 L206.8 408 L202.0 400 L197.2 408 L192.5 400 L187.8 408 L183.0 400 L178.2 408 L173.5 400 L168.8 408 L164.0 400 Z"/>
     <path d="M238 104 H300 a100 100 0 0 1 0 200 H238 Z"/>
-    <g fill="#111111">
-      <rect x="258" y="148" width="92" height="18" rx="9"/>
-      <rect x="258" y="195" width="64" height="18" rx="9"/>
-      <rect x="258" y="242" width="80" height="18" rx="9"/>
+    <g fill="#111111" clip-path="url(#curve)">
+      <rect x="258" y="149" width="140" height="18" rx="9"/>
+      <rect x="258" y="195" width="140" height="18" rx="9"/>
+      <rect x="258" y="241" width="140" height="18" rx="9"/>
     </g>
   </g>
 </svg>
