@@ -5,7 +5,7 @@
        r is how far the line ends reach from that center (smaller r = shorter lines). -->
   <defs>
     <clipPath id="curve">
-      <circle cx="300" cy="204" r="68"/>
+      <circle cx="300" cy="204" r="38"/>
       <rect x="0" y="0" width="300" height="512"/>
     </clipPath>
   </defs>
@@ -16,24 +16,23 @@
   <!-- Everything below is the white P. translate moves the whole P: (left/right, up/down) -->
   <g transform="translate(-26 -6)" fill="#FFFFFF">
 
-    <!-- Stem of the P with the torn zigzag bottom -->
+    <!-- Stem of the P with the torn zigzag bottom (5 teeth, 5 deep) -->
     <path d="M164 104 H240 V400
-             L235.2 408 L230.5 400 L225.8 408 L221 400
-             L216.2 408 L211.5 400 L206.8 408 L202 400
-             L197.2 408 L192.5 400 L187.8 408 L183 400
-             L178.2 408 L173.5 400 L168.8 408 L164 400 Z"/>
+             L232.4 405 L224.8 400 L217.2 405 L209.6 400 L202 405
+             L194.4 400 L186.8 405 L179.2 400 L171.6 405 L164 400 Z"/>
 
     <!-- Round part of the P: curve radius 100, from y=104 to y=304 -->
     <path d="M238 104 H300 a100 100 0 0 1 0 200 H238 Z"/>
 
-    <!-- Five printed lines (black). Their right ends are cut by the curve above.
-         x = where a line starts, y = its top, height = its thickness -->
+    <!-- Six printed lines (black), 4 thick and 14 apart, centered on the curve.
+         They start at the stem's edge; their right ends are cut by the curve above. -->
     <g fill="#111111" clip-path="url(#curve)">
-      <rect x="258" y="145.5" width="200" height="13"/>
-      <rect x="258" y="171.5" width="200" height="13"/>
-      <rect x="258" y="197.5" width="200" height="13"/>
-      <rect x="258" y="223.5" width="200" height="13"/>
-      <rect x="258" y="249.5" width="200" height="13"/>
+      <rect x="240" y="167" width="200" height="4"/>
+      <rect x="240" y="181" width="200" height="4"/>
+      <rect x="240" y="195" width="200" height="4"/>
+      <rect x="240" y="209" width="200" height="4"/>
+      <rect x="240" y="223" width="200" height="4"/>
+      <rect x="240" y="237" width="200" height="4"/>
     </g>
   </g>
 </svg>
