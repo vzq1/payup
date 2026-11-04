@@ -1,4 +1,4 @@
-const CACHE = "payup-v10";
+const CACHE = "payup-v11";
 const FILES = [
   "./",
   "index.html",
