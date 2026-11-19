@@ -49,6 +49,30 @@ function isPayerId(id) {
   return !!person && isOwnerName(person.name);
 }
 
+// GCash QRs of friends who paid, remembered on this phone by name.
+const QRS_KEY = "payup-qrs";
+function loadSavedQrs() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(QRS_KEY));
+    return saved && typeof saved === "object" ? saved : {};
+  } catch (e) {
+    return {};
+  }
+}
+function rememberQr(name, payload) {
+  const saved = loadSavedQrs();
+  if (payload) saved[name.toLowerCase()] = payload;
+  else delete saved[name.toLowerCase()];
+  try {
+    localStorage.setItem(QRS_KEY, JSON.stringify(saved));
+  } catch (e) {}
+}
+function payerQr() {
+  const p = payer();
+  if (!p) return null;
+  return parsePayQr(p.qr || loadSavedQrs()[p.name.toLowerCase()]);
+}
+
 function loadGroups() {
   try {
     const groups = JSON.parse(localStorage.getItem(GROUPS_KEY));
@@ -328,7 +352,6 @@ function renderPeople(result) {
   $("#people-count").textContent = state.people.length || "";
 
   $("#paid-by-name").textContent = ownerPaid() ? `${PAYEE} (you)` : payer().name;
-  $("#gcash-btn").hidden = !ownerPaid();
 
   const rows = result.rows.map((r) => {
     let sub = "No items yet";
@@ -670,6 +693,7 @@ function openPersonSheet(id) {
       return false;
     }
     person.name = clean;
+    if (person.qr) rememberQr(clean, person.qr);
     persist();
     renderMain();
     return true;
@@ -685,25 +709,23 @@ function openPersonSheet(id) {
       el("div", { class: "lines" }, totals),
       isPayerId(id) ? el("p", { class: "note", text: `${person.name} paid the bill, so ${person.name} doesn't pay anyone.` }) : null,
       isPayerId(id) ? null : el("button", { type: "button", class: "btn btn-solid", text: "Send GCash link", onclick: () => applyName() && sendGcashLink(id) }),
-      isPayerId(id) || !ownerPaid() ? null : el("button", { type: "button", class: "btn btn-outline", text: "Show GCash QR", onclick: () => applyName() && openQrSheet(id) }),
+      isPayerId(id) || !(ownerPaid() || payerQr()) ? null : el("button", { type: "button", class: "btn btn-outline", text: "Show GCash QR", onclick: () => applyName() && openQrSheet(id) }),
+      isPayerId(id) && !ownerPaid() ? el("button", { type: "button", class: "btn btn-outline", text: payerQr() ? "Show GCash QR" : "Add GCash QR", onclick: () => applyName() && openQrSheet(null, id) }) : null,
       el("button", { type: "button", class: "btn btn-danger", text: "Remove person", onclick: () => removePerson(id) }),
     ],
   });
 }
 
-function openQrSheet(personId = null) {
+function openQrSheet(personId = null, backId = personId) {
   const result = computeSplit(state);
   const index = state.people.findIndex((p) => p.id === personId);
   const row = index >= 0 ? result.rows[index] : null;
-  openSheet({
-    title: "GCash",
-    left: row ? { label: "Back", onClick: () => openPersonSheet(personId) } : null,
-    right: { label: "Done", onClick: closeSheet },
-    body: [
-      row ? el("div", { class: "pay" }, [
-        el("span", { class: "pay-who", text: `${row.name} pays` }),
-        el("span", { class: "pay-big num", text: peso.format(row.total) }),
-      ]) : null,
+  const reopen = () => openQrSheet(personId, backId);
+  const p = payer();
+  const qr = payerQr();
+  let body;
+  if (!p) {
+    body = [
       el("div", { class: "qr" }, [
         el("span", { class: "qr-label", text: "GCash · InstaPay" }),
         el("div", { class: "qr-box" }, el("img", { src: GCASH.qr, alt: `GCash QR code for ${GCASH.name}`, width: "300", height: "300" })),
@@ -714,8 +736,85 @@ function openQrSheet(personId = null) {
         ]),
       ]),
       el("p", { class: "note center", text: "Scan with GCash or any InstaPay app. Transfer fees may apply." }),
+    ];
+  } else if (qr) {
+    body = [
+      el("div", { class: "qr" }, [
+        el("span", { class: "qr-label", text: qr.gcash ? `${p.name} · GCash` : `${p.name} · InstaPay` }),
+        el("div", { class: "qr-box" }, el("img", { id: "payer-qr", src: qrSvgUrl(qr.payload), alt: `GCash QR code for ${p.name}`, width: "300", height: "300" })),
+        el("div", {}, [
+          qr.name ? el("div", { class: "qr-name", text: qr.name }) : null,
+          qr.userId ? el("div", { class: "qr-meta", text: `User ID ${maskedId(qr.userId)}` }) : null,
+        ]),
+      ]),
+      el("p", { class: "note center", text: "Scan with GCash or any InstaPay app. Transfer fees may apply." }),
+      row ? null : el("button", { type: "button", class: "btn btn-outline", text: "Change QR", onclick: () => pickPayerQr(reopen) }),
+      row ? null : el("button", { type: "button", class: "btn btn-danger", text: "Remove QR", onclick: () => {
+        delete p.qr;
+        rememberQr(p.name, null);
+        persist();
+        renderMain();
+        reopen();
+        toast(`Removed ${p.name}'s GCash QR`);
+      } }),
+    ];
+  } else {
+    loadQrReader().catch(() => {});
+    body = [
+      el("p", { class: "note", text: `${p.name} paid the bill. Add ${p.name}'s GCash QR so everyone can scan it.` }),
+      el("button", { type: "button", class: "btn btn-solid", text: `Upload ${p.name}'s GCash QR`, onclick: () => pickPayerQr(reopen) }),
+      el("p", { class: "note", text: `${QR_UPLOAD.label}. A screenshot of the QR works.` }),
+    ];
+  }
+  openSheet({
+    title: "GCash",
+    left: backId ? { label: "Back", onClick: () => openPersonSheet(backId) } : null,
+    right: { label: "Done", onClick: closeSheet },
+    body: [
+      row && !isPayerId(row.id) && (qr || !p) ? el("div", { class: "pay" }, [
+        el("span", { class: "pay-who", text: `${row.name} pays` }),
+        el("span", { class: "pay-big num", text: peso.format(row.total) }),
+      ]) : null,
+      ...body,
     ],
   });
+}
+
+let qrInput = null;
+function pickPayerQr(done) {
+  const p = payer();
+  if (!p) return;
+  if (!qrInput) {
+    qrInput = el("input", { type: "file", accept: QR_UPLOAD.accept, hidden: "", "aria-hidden": "true", tabindex: "-1" });
+    document.body.append(qrInput);
+  }
+  qrInput.value = "";
+  qrInput.onchange = async () => {
+    const file = qrInput.files && qrInput.files[0];
+    if (!file) return;
+    const problem = qrFileError(file);
+    if (problem) {
+      toast(problem);
+      return;
+    }
+    toast("Reading the QR…");
+    let qr;
+    try {
+      qr = await readQrPicture(file);
+    } catch (e) {
+      toast(e.message || "No QR found in that picture");
+      return;
+    }
+    const person = state.people.find((x) => x.id === p.id);
+    if (!person) return;
+    person.qr = qr.payload;
+    rememberQr(person.name, qr.payload);
+    persist();
+    renderMain();
+    done();
+    toast(`Saved ${person.name}'s GCash QR`);
+  };
+  qrInput.click();
 }
 
 /* ---------- Sharing and messages ---------- */
@@ -771,7 +870,10 @@ function openPaidBySheet() {
   const current = payer();
   const options = [
     { id: null, name: `${PAYEE} (you)`, sub: "Friends pay you. Your GCash QR is used." },
-    ...state.people.filter((p) => !isOwnerName(p.name)).map((p) => ({ id: p.id, name: p.name, sub: `Friends pay ${p.name}. Your GCash QR is hidden.` })),
+    ...state.people.filter((p) => !isOwnerName(p.name)).map((p) => {
+      const qr = p.qr || loadSavedQrs()[p.name.toLowerCase()];
+      return { id: p.id, name: p.name, qr, sub: qr ? `Friends pay ${p.name} with ${p.name}'s GCash QR.` : `Friends pay ${p.name}. You can add ${p.name}'s GCash QR.` };
+    }),
   ];
   const list = el("ul", { class: "list" }, options.map((o) => {
     const selected = (current ? current.id : null) === o.id;
@@ -784,6 +886,8 @@ function openPaidBySheet() {
     ]);
     onActivate(li, () => {
       state.paidBy = o.id;
+      const chosen = o.id && state.people.find((x) => x.id === o.id);
+      if (chosen && !chosen.qr && o.qr) chosen.qr = o.qr;
       persist();
       renderMain();
       closeSheet();
@@ -1040,7 +1144,35 @@ function paintSplit(ctx) {
   }
   total("Total", result.billTotal, true);
 
-  if (!ownerPaid()) {
+  const qr = payerQr();
+  const drawCard = (label, paint, name, meta) => {
+    y += 64;
+    ctx.save();
+    ctx.font = `600 26px ${font}`;
+    if ("letterSpacing" in ctx) ctx.letterSpacing = "4px";
+    ctx.fillStyle = muted;
+    ctx.textAlign = "center";
+    ctx.fillText(label, W / 2, y + 26);
+    ctx.restore();
+    y += 52;
+    const size = 560;
+    const x = (W - size) / 2;
+    ctx.fillStyle = rule;
+    ctx.fillRect(x - 2, y - 2, size + 4, size + 4);
+    ctx.fillStyle = "#FFFFFF";
+    ctx.fillRect(x, y, size, size);
+    paint(x, y, size);
+    y += size;
+    let lineY = y;
+    if (name) text(name, W / 2, (lineY += 60), 34, 700, ink, "center");
+    if (meta) text(meta, W / 2, (lineY += name ? 44 : 60), 26, 400, muted, "center");
+    text("Scan with GCash or any InstaPay app", W / 2, (lineY += 40), 26, 400, muted, "center");
+    y = lineY;
+  };
+
+  if (qr) {
+    drawCard(`PAY ${payeeName().toUpperCase()} WITH GCASH`, (x, top, size) => drawQr(ctx, qr.payload, x, top, size), qr.name, qr.userId ? `User ID ${maskedId(qr.userId)}` : "");
+  } else if (!ownerPaid()) {
     y += 64;
     ctx.save();
     ctx.font = `600 26px ${font}`;
@@ -1052,28 +1184,10 @@ function paintSplit(ctx) {
     text(`Send your share to ${payeeName()}`, W / 2, y + 96, 36, 600, ink, "center");
     y += 110;
   } else if (qrImage.complete && qrImage.naturalWidth > 0) {
-    y += 64;
-    ctx.save();
-    ctx.font = `600 26px ${font}`;
-    if ("letterSpacing" in ctx) ctx.letterSpacing = "4px";
-    ctx.fillStyle = muted;
-    ctx.textAlign = "center";
-    ctx.fillText("PAY WITH GCASH", W / 2, y + 26);
-    ctx.restore();
-    y += 52;
-    const size = 560;
-    const x = (W - size) / 2;
-    ctx.fillStyle = rule;
-    ctx.fillRect(x - 2, y - 2, size + 4, size + 4);
-    ctx.fillStyle = "#FFFFFF";
-    ctx.fillRect(x, y, size, size);
-    ctx.imageSmoothingEnabled = false;
-    ctx.drawImage(qrImage, x, y, size, size);
-    y += size;
-    text(GCASH.name, W / 2, y + 60, 34, 700, ink, "center");
-    text(`Mobile ${GCASH.mobile}`, W / 2, y + 104, 26, 400, muted, "center");
-    text("Scan with GCash or any InstaPay app", W / 2, y + 144, 26, 400, muted, "center");
-    y += 144;
+    drawCard("PAY WITH GCASH", (x, top, size) => {
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(qrImage, x, top, size, size);
+    }, GCASH.name, `Mobile ${GCASH.mobile}`);
   }
   return y + pad;
 }
@@ -1108,9 +1222,12 @@ async function saveImage() {
     const name = `payup-${new Date().toISOString().slice(0, 10)}.png`;
     const blob = dataUrlToBlob(dataUrl);
     const file = new File([blob], name, { type: "image/png" });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+    const text = `Pay ${payeeName()} on GCash: ${GCASH_LINK}`;
+    const withText = { files: [file], text };
+    const shareData = navigator.canShare && navigator.canShare(withText) ? withText : { files: [file] };
+    if (navigator.canShare && navigator.canShare(shareData)) {
       try {
-        await navigator.share({ files: [file] });
+        await navigator.share(shareData);
         return;
       } catch (e) {
         if (e.name === "AbortError") return;

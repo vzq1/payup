@@ -15,7 +15,8 @@ Everyone's shares add up exactly to the receipt total, so you never need to know
 ## Paying, history and groups
 
 - **Share split** sends everyone's amount, then one link that opens GCash: https://vzq1.github.io/payup/gcash/. GCash can't take the payee or amount from a link, so friends see their amount in the message, then scan or upload the QR. **Send GCash link** in a person's panel sends just their amount and the link.
-- **Paid by** under People is Bon by default, and friends pay Bon with the GCash QR in the app. Pick someone else when Bon is only dividing the bill: shares stay the same, messages say who to pay, and Bon's QR is hidden.
+- **Paid by** under People is Bon by default, and friends pay Bon with the GCash QR in the app. Pick someone else when Bon is only dividing the bill: shares stay the same, messages say who to pay, and Bon's QR is hidden. Tap **GCash QR** to upload the payer's GCash QR (JPG, PNG, WebP or HEIC, up to 10 MB). The app reads it and shows it the same way as Bon's, and remembers it by name on the phone.
+- **Save image** shares the picture of the split together with the GCash link.
 - **Groups** saves the people you usually eat with. Tap a group to add everyone in it to a bill. Groups stay on the phone.
 - **History** lists past bills, saved to Supabase as you edit (and on the phone first, so the app works offline). Tap a bill to reopen it, or tap **Edit** to remove bills. **Clear all** starts a new bill and keeps the old one in History.
 
@@ -36,6 +37,8 @@ To set up your own Supabase project, run `supabase.sql` in its SQL Editor, turn 
 | `gcash/index.html` | The page behind the GCash link: it opens GCash |
 | `supabase.sql` | The database table and access rules for Supabase |
 | `vendor/supabase.js` | The Supabase JavaScript library (MIT), kept in the repo so the app works offline |
+| `qr.js` | Reads a GCash QR from a picture, checks it, and draws it |
+| `vendor/qrcode.js`, `vendor/jsQR.js` | qrcode-generator (MIT) draws QR codes; jsQR (Apache-2.0) reads them from pictures |
 | `gcash-qr.svg` | Bon's GCash QR, redrawn from the GCash app's QR so it stays sharp at any size |
 | `sw.js`, `manifest.webmanifest`, `icons/` | Offline support and the Home Screen icon |
 
@@ -56,4 +59,6 @@ python3 -m http.server
 ## Credits
 
 - [supabase-js](https://github.com/supabase/supabase-js) (MIT), license in `vendor/supabase-js.LICENSE`.
+- [qrcode-generator](https://github.com/kazuhikoarase/qrcode-generator) (MIT), license in `vendor/qrcode.LICENSE`.
+- [jsQR](https://github.com/cozmo/jsQR) (Apache-2.0), license in `vendor/jsQR.LICENSE`.
 - GCash and InstaPay are trademarks of their respective owners.

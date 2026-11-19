@@ -1,4 +1,4 @@
-const CACHE = "payup-v28";
+const CACHE = "payup-v29";
 const FILES = [
   "./",
   "index.html",
@@ -8,6 +8,9 @@ const FILES = [
   "app.js",
   "pay.js",
   "vendor/supabase.js",
+  "vendor/qrcode.js",
+  "vendor/jsQR.js",
+  "qr.js",
   "manifest.webmanifest",
   "icons/icon.svg",
   "icons/icon-192.png",
