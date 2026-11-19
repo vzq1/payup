@@ -323,8 +323,10 @@ a.btn { text-decoration: none; }
 .row.swipe:active { opacity: 1; }
 .swipe-inner {
   position: relative; z-index: 1; display: flex; align-items: center; gap: 12px;
-  min-height: 64px; padding: 12px 0; background: var(--row-bg, var(--bg));
+  min-height: 64px; padding: 12px 0;
 }
+.row.swipe.moving .swipe-inner { background: var(--row-bg, var(--bg)); }
+.row.swipe:not(.moving) .swipe-action { visibility: hidden; }
 .swipe-inner:active { opacity: .55; }
 .sheet { --row-bg: var(--sheet); }
 .swipe-action {

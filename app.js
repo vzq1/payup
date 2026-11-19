@@ -147,9 +147,13 @@ function swipeToRemove(li, onRemove) {
   li.classList.add("swipe");
   li.append(action, inner);
 
-  let startX = 0, startY = 0, offset = 0, base = 0, tracking = false, horizontal = null, swiped = false;
+  let startX = 0, startY = 0, offset = 0, base = 0, tracking = false, horizontal = null, swiped = false, settle = 0;
   const move = (x, animate) => {
     offset = x;
+    clearTimeout(settle);
+    if (x) li.classList.add("moving");
+    else if (animate) settle = setTimeout(() => li.classList.remove("moving"), 240);
+    else li.classList.remove("moving");
     inner.style.transition = animate ? "transform 220ms var(--ease-out)" : "none";
     inner.style.transform = x ? `translateX(${x}px)` : "";
   };
