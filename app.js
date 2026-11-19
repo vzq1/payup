@@ -358,10 +358,15 @@ function openItemSheet(id) {
 
   const nameInput = el("input", {
     class: "line-input", type: "text", placeholder: "e.g. Pizza", maxlength: "40",
-    autocomplete: "off", "aria-label": "Item name",
+    enterkeyhint: "next", autocomplete: "off", "aria-label": "Item name",
   });
   nameInput.value = draft.name;
   nameInput.addEventListener("input", () => (draft.name = nameInput.value));
+  nameInput.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.isComposing) return;
+    e.preventDefault();
+    priceInput.focus();
+  });
 
   const priceInput = el("input", {
     class: "num", type: "text", inputmode: "decimal", placeholder: "0.00",
@@ -885,6 +890,11 @@ receiptInput.addEventListener("input", () => {
   state.receiptTotal = receiptInput.value;
   persist();
   renderMain();
+});
+receiptInput.addEventListener("keydown", (e) => {
+  if (e.key !== "Enter" || e.isComposing) return;
+  e.preventDefault();
+  addPersonRow.querySelector(".add-input").focus();
 });
 
 $("#share").addEventListener("click", share);
