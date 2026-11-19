@@ -35,6 +35,8 @@
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 [hidden] { display: none !important; }
+html { touch-action: manipulation; }
+button, a, input, label, select, textarea { touch-action: manipulation; }
 
 body {
   margin: 0;
@@ -117,7 +119,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 .saved-img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 12px; }
 .copy-area {
   width: 100%; padding: 12px 14px; border: 1px solid var(--line-strong); border-radius: 12px;
-  background: transparent; color: var(--text); font: inherit; font-size: 15px; line-height: 1.5; resize: none;
+  background: transparent; color: var(--text); font: inherit; font-size: 16px; line-height: 1.5; resize: none;
 }
 
 /* ---------- Lists ---------- */
@@ -235,7 +237,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   position: fixed; z-index: 40; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px));
   max-width: calc(100% - 40px); padding: 10px 16px; border-radius: 999px;
   background: var(--solid); color: var(--on-solid); font-size: 14px; text-align: center;
-  opacity: 0; transform: translate(-50%, 8px);
+  opacity: 0; transform: translate(-50%, 8px); pointer-events: none;
   transition: opacity .2s ease, transform .2s ease;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
@@ -315,3 +317,17 @@ a.btn { text-decoration: none; }
 .paid-name { font-size: 15px; font-weight: 600; }
 .paid-name::after { content: "  ›"; color: var(--muted); font-weight: 400; }
 .row-check { flex: none; width: 20px; text-align: right; font-weight: 700; }
+
+/* Slide a row left to remove it */
+.row.swipe { display: block; position: relative; overflow: hidden; padding: 0; touch-action: pan-y; }
+.row.swipe:active { opacity: 1; }
+.swipe-inner {
+  position: relative; z-index: 1; display: flex; align-items: center; gap: 12px;
+  min-height: 64px; padding: 12px 0; background: var(--row-bg, var(--bg));
+}
+.swipe-inner:active { opacity: .55; }
+.sheet { --row-bg: var(--sheet); }
+.swipe-action {
+  position: absolute; top: 0; right: 0; bottom: 0; width: 88px;
+  background: var(--danger); color: var(--on-danger); font-size: 15px; font-weight: 600;
+}

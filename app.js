@@ -133,6 +133,93 @@ function el(tag, props = {}, children = []) {
   return node;
 }
 
+// Slide a row left to reveal Remove; slide all the way to remove it straight away.
+let openSwipe = null;
+document.addEventListener("pointerdown", (e) => {
+  if (openSwipe && !openSwipe.li.contains(e.target)) openSwipe.close();
+}, true);
+
+function swipeToRemove(li, onRemove) {
+  const ACTION = 88;
+  const inner = el("div", { class: "swipe-inner" });
+  while (li.firstChild) inner.append(li.firstChild);
+  const action = el("button", { type: "button", class: "swipe-action", text: "Remove", tabindex: "-1", "aria-hidden": "true" });
+  li.classList.add("swipe");
+  li.append(action, inner);
+
+  let startX = 0, startY = 0, offset = 0, base = 0, tracking = false, horizontal = null, swiped = false;
+  const move = (x, animate) => {
+    offset = x;
+    inner.style.transition = animate ? "transform 220ms var(--ease-out)" : "none";
+    inner.style.transform = x ? `translateX(${x}px)` : "";
+  };
+  const api = { li, close: () => { move(0, true); if (openSwipe === api) openSwipe = null; } };
+  const remove = () => {
+    if (openSwipe === api) openSwipe = null;
+    onRemove();
+    move(0, false);
+  };
+
+  li.addEventListener("pointerdown", (e) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (action.contains(e.target)) return;
+    startX = e.clientX; startY = e.clientY;
+    base = offset; tracking = true; horizontal = null;
+  });
+  li.addEventListener("pointermove", (e) => {
+    if (!tracking) return;
+    const dx = e.clientX - startX, dy = e.clientY - startY;
+    if (horizontal === null) {
+      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      horizontal = Math.abs(dx) > Math.abs(dy);
+      if (!horizontal) { tracking = false; return; }
+      li.setPointerCapture(e.pointerId);
+      if (openSwipe && openSwipe !== api) openSwipe.close();
+    }
+    move(Math.min(0, base + dx), false);
+  });
+  const end = () => {
+    if (!tracking || !horizontal) { tracking = false; return; }
+    tracking = false;
+    swiped = true;
+    const width = li.offsetWidth;
+    if (offset < -width * 0.55) {
+      move(-width, true);
+      setTimeout(remove, 200);
+    } else if (offset < -ACTION / 2) {
+      move(-ACTION, true);
+      openSwipe = api;
+    } else {
+      api.close();
+    }
+  };
+  li.addEventListener("pointerup", end);
+  li.addEventListener("pointercancel", end);
+  // a swipe, or a tap on a row that's slid open, shouldn't also open the row
+  li.addEventListener("click", (e) => {
+    if (action.contains(e.target)) return;
+    if (swiped || offset !== 0) {
+      e.stopImmediatePropagation();
+      e.preventDefault();
+      if (!swiped) api.close();
+    }
+    swiped = false;
+  }, true);
+  action.addEventListener("click", (e) => {
+    e.stopPropagation();
+    remove();
+  });
+  return li;
+}
+
+function deleteItem(id) {
+  const item = state.items.find((i) => i.id === id);
+  state.items = state.items.filter((i) => i.id !== id);
+  persist();
+  renderMain();
+  if (item) toast(`Removed ${item.name.trim() || "the item"}`);
+}
+
 function onActivate(node, fn) {
   node.addEventListener("click", fn);
   node.addEventListener("keydown", (e) => {
@@ -204,7 +291,7 @@ function renderSummary(result) {
 const addPersonRow = (() => {
   const input = el("input", {
     class: "add-input", type: "text", placeholder: "Add person", maxlength: "30",
-    enterkeyhint: "done", autocomplete: "off", "aria-label": "Add person",
+    enterkeyhint: "done", autocomplete: "off", autocapitalize: "words", "aria-label": "Add person",
   });
   const button = el("button", { type: "button", class: "add-btn", text: "Add" });
   button.hidden = true;
@@ -212,6 +299,8 @@ const addPersonRow = (() => {
     if (addPerson(input.value)) {
       input.value = "";
       button.hidden = true;
+      // re-focus so the phone keyboard starts the next name with a capital letter again
+      input.blur();
       input.focus();
     }
   };
@@ -244,6 +333,7 @@ function renderPeople(result) {
       el("span", { class: "row-amount num", text: peso.format(r.total) }),
     ]);
     onActivate(li, () => openPersonSheet(r.id));
+    swipeToRemove(li, () => removePerson(r.id));
     return li;
   });
 
@@ -270,6 +360,7 @@ function renderItems(result) {
       el("span", { class: "row-amount light num", text: peso.format(toNumber(item.price)) }),
     ]);
     onActivate(li, () => openItemSheet(item.id));
+    swipeToRemove(li, () => deleteItem(item.id));
     return li;
   });
 
@@ -288,8 +379,13 @@ function renderItems(result) {
   note.classList.toggle("err", result.unassigned !== 0);
 }
 
+// "josh" -> "Josh", "ana marie" -> "Ana Marie"; the rest of each word stays as typed
+function nameCase(name) {
+  return name.trim().replace(/\s+/g, " ").replace(/(^|\s)(\S)/g, (m, space, ch) => space + ch.toLocaleUpperCase());
+}
+
 function addPerson(name) {
-  const clean = name.trim().replace(/\s+/g, " ");
+  const clean = nameCase(name);
   if (!clean) return false;
   if (state.people.some((p) => p.name.toLowerCase() === clean.toLowerCase())) {
     toast(`${clean} is already on the list`);
@@ -539,7 +635,7 @@ function openPersonSheet(id) {
   const result = computeSplit(state);
   const row = result.rows[index];
 
-  const nameInput = el("input", { class: "line-input", type: "text", maxlength: "30", autocomplete: "off", "aria-label": "Name" });
+  const nameInput = el("input", { class: "line-input", type: "text", maxlength: "30", autocomplete: "off", autocapitalize: "words", "aria-label": "Name" });
   nameInput.value = person.name;
 
   const validIds = new Set(state.people.map((p) => p.id));
@@ -558,7 +654,7 @@ function openPersonSheet(id) {
   totals.push(line("Pays", row.total, "total"));
 
   const applyName = () => {
-    const clean = nameInput.value.trim().replace(/\s+/g, " ");
+    const clean = nameCase(nameInput.value);
     if (!clean || clean === person.name) return true;
     if (state.people.some((p) => p.id !== id && p.name.toLowerCase() === clean.toLowerCase())) {
       toast(`${clean} is already on the list`);
@@ -770,6 +866,12 @@ function openGroupsSheet() {
       }
       const li = el("li", { class: "row", role: "button", tabindex: "0" }, [main, el("span", { class: "row-amount light", text: "Add" })]);
       onActivate(li, () => addGroup(g));
+      swipeToRemove(li, () => {
+        groups = groups.filter((x) => x.id !== g.id);
+        saveGroups(groups);
+        renderRows();
+        toast(`Removed ${g.name}`);
+      });
       return li;
     }));
   }
@@ -858,6 +960,7 @@ async function openHistorySheet() {
         el("span", { class: "row-amount num", text: peso.format(result.billTotal) }),
       ]);
       onActivate(li, () => openBill(b));
+      swipeToRemove(li, () => removeBill(b, { disabled: false }));
       return li;
     }));
   }
