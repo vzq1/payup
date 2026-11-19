@@ -168,7 +168,7 @@ function swipeToRemove(li, onRemove) {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (action.contains(e.target)) return;
     startX = e.clientX; startY = e.clientY;
-    base = offset; tracking = true; horizontal = null;
+    base = offset; tracking = true; horizontal = null; swiped = false;
   });
   li.addEventListener("pointermove", (e) => {
     if (!tracking) return;
@@ -177,12 +177,17 @@ function swipeToRemove(li, onRemove) {
       if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
       horizontal = Math.abs(dx) > Math.abs(dy);
       if (!horizontal) { tracking = false; return; }
+      li.classList.add("dragged");
       li.setPointerCapture(e.pointerId);
+      swiped = true;
+      // sliding right on a closed row does nothing
+      if (dx > 0 && base === 0) { tracking = false; return; }
       if (openSwipe && openSwipe !== api) openSwipe.close();
     }
     move(Math.min(0, base + dx), false);
   });
   const end = () => {
+    li.classList.remove("dragged");
     if (!tracking || !horizontal) { tracking = false; return; }
     tracking = false;
     swiped = true;

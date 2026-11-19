@@ -328,6 +328,7 @@ a.btn { text-decoration: none; }
 .row.swipe.moving .swipe-inner { background: var(--row-bg, var(--bg)); }
 .row.swipe:not(.moving) .swipe-action { visibility: hidden; }
 .swipe-inner:active { opacity: .55; }
+.row.swipe.dragged .swipe-inner, .row.swipe.moving .swipe-inner { opacity: 1; }
 .sheet { --row-bg: var(--sheet); }
 .swipe-action {
   position: absolute; top: 0; right: 0; bottom: 0; width: 88px;
