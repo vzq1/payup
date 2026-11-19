@@ -100,7 +100,8 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 .hint:empty { display: none; }
 .hint.err { color: var(--danger); }
 
-.actions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 24px; }
+.actions { display: flex; gap: 8px; margin-top: 24px; }
+.actions .btn { flex: 1 1 0; min-width: 0; }
 .btn {
   width: 100%; height: 48px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
@@ -298,3 +299,19 @@ a.btn { text-decoration: none; }
   .splash-bar { animation: splash-show 200ms var(--ease-out) 1000ms forwards !important; }
   .splash-bar i { width: 100%; animation: splash-pulse 1400ms linear infinite alternate !important; }
 }
+
+/* History: remove a bill (shown after tapping Edit) */
+.row-remove { flex: none; font-size: 15px; font-weight: 600; color: var(--danger); padding: 8px 0 8px 12px; }
+.row-remove:disabled { opacity: .4; }
+
+/* People: saved groups and who paid */
+.head-actions { display: flex; align-items: baseline; gap: 16px; }
+.text-btn.small { font-size: 13px; padding: 0; }
+.paid-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; width: 100%;
+  padding: 14px 0; border-bottom: 1px solid var(--line); text-align: left;
+}
+.paid-label { font-size: 14px; color: var(--muted); }
+.paid-name { font-size: 15px; font-weight: 600; }
+.paid-name::after { content: "  ›"; color: var(--muted); font-weight: 400; }
+.row-check { flex: none; width: 20px; text-align: right; font-weight: 700; }

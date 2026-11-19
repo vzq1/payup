@@ -3,7 +3,6 @@
   const billId = params.get("bill");
   if (!billId) return;
 
-  const PAYEE = "Bon";
   const editor = document.getElementById("editor");
   const page = document.getElementById("pay-page");
   const body = document.getElementById("pay-body");
@@ -92,10 +91,16 @@
     ]);
   }
 
+  // who friends pay: the person who paid the bill, or Bon (whose GCash QR is in the app)
+  function billPayee() {
+    const p = bill.paidBy && bill.people.find((x) => x.id === bill.paidBy);
+    return p && p.name.trim().toLowerCase() !== PAYEE.toLowerCase() ? { id: p.id, name: p.name } : { id: null, name: PAYEE };
+  }
+
   function renderChooser(result) {
     body.replaceChildren(
       el("div", { class: "pay-head" }, [
-        el("span", { class: "label", text: `Splitting with ${PAYEE}` }),
+        el("span", { class: "label", text: `Splitting with ${billPayee().name}` }),
         el("h1", { class: "pay-title", text: "Who are you?" }),
       ]),
       el("ul", { class: "list" }, result.rows.map((r) => {
@@ -134,15 +139,17 @@
     const everyone = result.rows.map((r) => line(r.name, r.total));
     everyone.push(line("Receipt total", result.billTotal, "total"));
 
-    const isMe = person.name.trim().toLowerCase() === PAYEE.toLowerCase();
+    const payee = billPayee();
+    const isMe = payee.id ? payee.id === person.id : person.name.trim().toLowerCase() === PAYEE.toLowerCase();
 
     body.replaceChildren(
       el("div", { class: "pay-head" }, [
-        el("span", { class: "label", text: isMe ? `${person.name}, your share` : `${person.name}, you owe ${PAYEE}` }),
+        el("span", { class: "label", text: isMe ? `${person.name}, your share` : `${person.name}, you owe ${payee.name}` }),
         el("div", { class: "pay-amount num", text: peso.format(row.total) }),
       ]),
       el("div", { class: "lines" }, itemLines),
-      isMe ? null : el("div", { class: "field" }, [
+      !isMe && payee.id ? el("p", { class: "note", text: `${payee.name} paid the bill. Send your share to ${payee.name}.` }) : null,
+      isMe || payee.id ? null : el("div", { class: "field" }, [
         el("span", { class: "label", text: "Pay with GCash" }),
         el("ol", { class: "steps" }, [
           step(1, "Save Bon's QR to your photos.", el("button", { type: "button", class: "btn btn-outline", text: "Save QR", onclick: saveQr })),
@@ -151,7 +158,7 @@
         ]),
         el("p", { class: "hint", text: "If GCash doesn't open, open it yourself and follow step 3." }),
       ]),
-      isMe ? null : el("div", { class: "qr" }, [
+      isMe || payee.id ? null : el("div", { class: "qr" }, [
         el("span", { class: "qr-label", text: "Paying from another phone? Scan this" }),
         el("div", { class: "qr-box" }, el("img", { src: GCASH.qr, alt: `GCash QR code for ${GCASH.name}`, width: "300", height: "300" })),
         el("div", {}, [

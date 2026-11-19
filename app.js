@@ -1,5 +1,7 @@
 const STORAGE_KEY = "bill-split-v1";
 const THEME_KEY = "bill-split-theme";
+const PAYEE = "Bon";
+const GCASH_LINK = "https://vzq1.github.io/payup/gcash/";
 const GCASH = {
   name: "ME****O TH****S J** B.",
   mobile: "0976 041 ••••",
@@ -30,6 +32,37 @@ const splash = (() => {
 })();
 splash.hold();
 
+const GROUPS_KEY = "payup-groups";
+
+// Who paid the bill. null means the app's owner (Bon), whose GCash QR is in the app.
+const isOwnerName = (name) => name.trim().toLowerCase() === PAYEE.toLowerCase();
+function payer() {
+  const p = state.paidBy && state.people.find((x) => x.id === state.paidBy);
+  return p && !isOwnerName(p.name) ? p : null;
+}
+const ownerPaid = () => !payer();
+const payeeName = () => (payer() ? payer().name : PAYEE);
+function isPayerId(id) {
+  const p = payer();
+  if (p) return p.id === id;
+  const person = state.people.find((x) => x.id === id);
+  return !!person && isOwnerName(person.name);
+}
+
+function loadGroups() {
+  try {
+    const groups = JSON.parse(localStorage.getItem(GROUPS_KEY));
+    return Array.isArray(groups) ? groups : [];
+  } catch (e) {
+    return [];
+  }
+}
+function saveGroups(groups) {
+  try {
+    localStorage.setItem(GROUPS_KEY, JSON.stringify(groups));
+  } catch (e) {}
+}
+
 const peso = new Intl.NumberFormat("en-PH", {
   style: "currency",
   currency: "PHP",
@@ -38,14 +71,14 @@ const peso = new Intl.NumberFormat("en-PH", {
 });
 
 function defaultState() {
-  return { receiptTotal: "", people: [], items: [] };
+  return { receiptTotal: "", people: [], items: [], paidBy: null };
 }
 
 function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (saved && Array.isArray(saved.people) && Array.isArray(saved.items)) {
-      return { receiptTotal: saved.receiptTotal || "", people: saved.people, items: saved.items, billId: saved.billId };
+      return { receiptTotal: saved.receiptTotal || "", people: saved.people, items: saved.items, billId: saved.billId, paidBy: saved.paidBy || null };
     }
   } catch (e) {}
   if (window.PAYUP_SAMPLE) return { ...JSON.parse(JSON.stringify(window.PAYUP_SAMPLE)), sample: true };
@@ -196,9 +229,13 @@ const addPersonRow = (() => {
 function renderPeople(result) {
   $("#people-count").textContent = state.people.length || "";
 
+  $("#paid-by-name").textContent = ownerPaid() ? `${PAYEE} (you)` : payer().name;
+  $("#gcash-btn").hidden = !ownerPaid();
+
   const rows = result.rows.map((r) => {
     let sub = "No items yet";
     if (r.food > 0) sub = result.hasReceipt ? `Food ${peso.format(r.food)} · Service ${peso.format(r.extra)}` : `Food ${peso.format(r.food)}`;
+    if (isPayerId(r.id)) sub = `Paid the bill · ${sub}`;
     const li = el("li", { class: "row", role: "button", tabindex: "0" }, [
       el("div", { class: "row-main" }, [
         el("span", { class: "row-title", text: r.name }),
@@ -268,6 +305,7 @@ function removePerson(id) {
   const person = state.people.find((p) => p.id === id);
   const used = state.items.some((i) => i.people.includes(id));
   const remove = () => {
+    if (state.paidBy === id) state.paidBy = null;
     state.people = state.people.filter((p) => p.id !== id);
     for (const item of state.items) {
       item.people = item.people.filter((pid) => pid !== id);
@@ -540,8 +578,9 @@ function openPersonSheet(id) {
       field("Name", nameInput),
       field("Items", el("div", { class: "lines" }, itemLines)),
       el("div", { class: "lines" }, totals),
-      cloud.enabled ? el("button", { type: "button", class: "btn btn-solid", text: "Send pay link", onclick: () => applyName() && sendPayLink(id) }) : null,
-      el("button", { type: "button", class: cloud.enabled ? "btn btn-outline" : "btn btn-solid", text: "Show GCash QR", onclick: () => applyName() && openQrSheet(id) }),
+      isPayerId(id) ? el("p", { class: "note", text: `${person.name} paid the bill, so ${person.name} doesn't pay anyone.` }) : null,
+      isPayerId(id) ? null : el("button", { type: "button", class: "btn btn-solid", text: "Send GCash link", onclick: () => applyName() && sendGcashLink(id) }),
+      isPayerId(id) || !ownerPaid() ? null : el("button", { type: "button", class: "btn btn-outline", text: "Show GCash QR", onclick: () => applyName() && openQrSheet(id) }),
       el("button", { type: "button", class: "btn btn-danger", text: "Remove person", onclick: () => removePerson(id) }),
     ],
   });
@@ -576,19 +615,15 @@ function openQrSheet(personId = null) {
 
 /* ---------- Sharing and messages ---------- */
 
-function summaryText(withLinks = false) {
+function summaryText() {
   const result = computeSplit(state);
-  const lines = ["PayUp"];
-  for (const r of result.rows) {
-    lines.push(`${r.name}: ${peso.format(r.total)}`);
-    if (withLinks) lines.push(`Pay here: ${cloud.payLink(state.billId, r.id)}`);
-  }
-  lines.push("");
+  const lines = ["PayUp", ...result.rows.map((r) => `${r.name}: ${peso.format(r.total)}${isPayerId(r.id) ? " (paid the bill)" : ""}`), ""];
   lines.push(`Food: ${peso.format(result.itemsTotal)}`);
   if (result.hasReceipt) {
     lines.push(`${result.extra >= 0 ? "Service charge" : "Discount"}: ${peso.format(result.extra)}`);
   }
   lines.push(`Total: ${peso.format(result.billTotal)}`);
+  lines.push("", `Pay ${payeeName()} on GCash: ${GCASH_LINK}`);
   return lines.join("\n");
 }
 
@@ -597,16 +632,7 @@ async function share() {
     toast("Add people and items first");
     return;
   }
-  const withLinks = cloud.enabled && (await ensureSaved());
-  await shareText(summaryText(withLinks));
-}
-
-async function ensureSaved() {
-  if (!state.billId) persist();
-  if (cloud.isSaved(state)) return true;
-  const ok = await cloud.saveNow(state);
-  if (!ok) toast("Couldn't save the bill online, so the links are left out");
-  return ok;
+  await shareText(summaryText());
 }
 
 async function shareText(text) {
@@ -627,12 +653,129 @@ async function shareText(text) {
   }
 }
 
-async function sendPayLink(personId) {
-  if (!(await ensureSaved())) return;
+async function sendGcashLink(personId) {
   const result = computeSplit(state);
   const index = state.people.findIndex((p) => p.id === personId);
   const row = result.rows[index];
-  await shareText(`${row.name}, your share is ${peso.format(row.total)}. Pay here: ${cloud.payLink(state.billId, personId)}`);
+  await shareText(`${row.name}, you owe ${payeeName()} ${peso.format(row.total)}. Pay on GCash: ${GCASH_LINK}`);
+}
+
+/* ---------- Who paid ---------- */
+
+function openPaidBySheet() {
+  const current = payer();
+  const options = [
+    { id: null, name: `${PAYEE} (you)`, sub: "Friends pay you. Your GCash QR is used." },
+    ...state.people.filter((p) => !isOwnerName(p.name)).map((p) => ({ id: p.id, name: p.name, sub: `Friends pay ${p.name}. Your GCash QR is hidden.` })),
+  ];
+  const list = el("ul", { class: "list" }, options.map((o) => {
+    const selected = (current ? current.id : null) === o.id;
+    const li = el("li", { class: "row", role: "button", tabindex: "0", "aria-pressed": String(selected) }, [
+      el("div", { class: "row-main" }, [
+        el("span", { class: "row-title", text: o.name }),
+        el("span", { class: "row-sub", text: o.sub }),
+      ]),
+      el("span", { class: "row-check", text: selected ? "✓" : "" }),
+    ]);
+    onActivate(li, () => {
+      state.paidBy = o.id;
+      persist();
+      renderMain();
+      closeSheet();
+      toast(o.id ? `${o.name} paid the bill` : "You paid the bill");
+    });
+    return li;
+  }));
+  openSheet({
+    title: "Who paid?",
+    left: null,
+    right: { label: "Close", onClick: closeSheet },
+    body: [
+      el("p", { class: "note", text: "Everyone's share stays the same. This only changes who they pay." }),
+      list,
+      options.length === 1 ? el("p", { class: "note", text: "Add people first to pick one of them." }) : null,
+    ],
+  });
+}
+
+/* ---------- Saved groups ---------- */
+
+function openGroupsSheet() {
+  let groups = loadGroups();
+  let editing = false;
+  const note = el("p", { class: "note" });
+  const list = el("ul", { class: "list" });
+
+  const names = state.people.map((p) => p.name);
+  const nameInput = el("input", {
+    class: "line-input", type: "text", placeholder: "e.g. Barkada", maxlength: "30",
+    enterkeyhint: "done", autocomplete: "off", "aria-label": "Group name",
+  });
+  const saveGroup = () => {
+    const name = nameInput.value.trim().replace(/\s+/g, " ") || names.slice(0, 3).join(", ");
+    const existing = groups.find((g) => g.name.toLowerCase() === name.toLowerCase());
+    if (existing) existing.people = names;
+    else groups.push({ id: newId(), name, people: names });
+    saveGroups(groups);
+    nameInput.value = "";
+    nameInput.blur();
+    renderRows();
+    toast(existing ? `Updated ${name}` : `Saved ${name}`);
+  };
+  nameInput.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.isComposing) return;
+    e.preventDefault();
+    saveGroup();
+  });
+  const saveSection = names.length ? el("div", { class: "field" }, [
+    el("span", { class: "label", text: "Save the people on this bill" }),
+    el("p", { class: "note", text: names.join(", ") }),
+    nameInput,
+    el("button", { type: "button", class: "btn btn-outline", text: "Save as a group", onclick: saveGroup }),
+  ]) : null;
+
+  function addGroup(g) {
+    const have = new Set(state.people.map((p) => p.name.toLowerCase()));
+    const adding = g.people.filter((n) => !have.has(n.toLowerCase()));
+    closeSheet();
+    if (adding.length === 0) {
+      toast(`Everyone in ${g.name} is already on this bill`);
+      return;
+    }
+    for (const n of adding) state.people.push({ id: newId(), name: n });
+    persist();
+    renderMain();
+    toast(`Added ${adding.join(", ")}`);
+  }
+
+  function renderRows() {
+    setBarButton($("#sheet-cancel"), groups.length ? { label: editing ? "Done" : "Edit", onClick: () => { editing = !editing; renderRows(); } } : null);
+    note.hidden = groups.length > 0;
+    note.textContent = "No groups yet. Add the people you usually eat with, then save them as a group here.";
+    list.replaceChildren(...groups.map((g) => {
+      const main = el("div", { class: "row-main" }, [
+        el("span", { class: "row-title", text: g.name }),
+        el("span", { class: "row-sub", text: g.people.join(", ") }),
+      ]);
+      if (editing) {
+        const remove = el("button", { type: "button", class: "row-remove", text: "Remove", "aria-label": `Remove the ${g.name} group` });
+        remove.addEventListener("click", () => {
+          groups = groups.filter((x) => x.id !== g.id);
+          saveGroups(groups);
+          if (groups.length === 0) editing = false;
+          renderRows();
+          toast(`Removed ${g.name}`);
+        });
+        return el("li", { class: "row" }, [main, remove]);
+      }
+      const li = el("li", { class: "row", role: "button", tabindex: "0" }, [main, el("span", { class: "row-amount light", text: "Add" })]);
+      onActivate(li, () => addGroup(g));
+      return li;
+    }));
+  }
+
+  openSheet({ title: "Saved groups", left: null, right: { label: "Close", onClick: closeSheet }, body: [note, list, saveSection] });
+  renderRows();
 }
 
 /* ---------- History ---------- */
@@ -649,39 +792,84 @@ const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numer
 async function openHistorySheet() {
   const note = el("p", { class: "note", text: "Loading your bills..." });
   const list = el("ul", { class: "list" });
-  openSheet({ title: "History", left: null, right: { label: "Done", onClick: closeSheet }, body: [note, list] });
+  let bills = null;
+  let editing = false;
+  const editButton = () => (bills && bills.length ? { label: editing ? "Done" : "Edit", onClick: toggleEditing } : null);
+  openSheet({ title: "History", left: null, right: { label: "Close", onClick: closeSheet }, body: [note, list] });
+
+  function toggleEditing() {
+    editing = !editing;
+    renderRows();
+  }
+
+  function openBill(b) {
+    state = { ...JSON.parse(JSON.stringify(b.data)), billId: b.id };
+    receiptInput.value = state.receiptTotal || "";
+    saveLocal();
+    renderMain();
+    closeSheet();
+    toast(`Opened ${billTitle(b.data)}`);
+  }
+
+  async function removeBill(b, button) {
+    button.disabled = true;
+    if (!(await cloud.remove(b.id))) {
+      button.disabled = false;
+      toast("Couldn't remove it. Check your connection and try again");
+      return;
+    }
+    bills = bills.filter((x) => x.id !== b.id);
+    if (b.id === state.billId) {
+      state = defaultState();
+      receiptInput.value = "";
+      saveLocal();
+      renderMain();
+      toast("Removed. Started a new bill");
+    } else {
+      toast("Removed from History");
+    }
+    if (bills.length === 0) editing = false;
+    renderRows();
+  }
+
+  function renderRows() {
+    setBarButton($("#sheet-cancel"), editButton());
+    if (bills.length === 0) {
+      note.hidden = false;
+      note.textContent = "No saved bills yet. Bills save here as soon as you add someone.";
+      list.replaceChildren();
+      return;
+    }
+    note.hidden = true;
+    list.replaceChildren(...bills.map((b) => {
+      const result = computeSplit(b.data);
+      const current = b.id === state.billId;
+      const main = el("div", { class: "row-main" }, [
+        el("span", { class: "row-title", text: billTitle(b.data) }),
+        el("span", { class: "row-sub", text: `${shortDate.format(new Date(b.updated_at))}${current ? " · Open now" : ""}` }),
+      ]);
+      if (editing) {
+        const remove = el("button", { type: "button", class: "row-remove", text: "Remove", "aria-label": `Remove ${billTitle(b.data)} from History` });
+        remove.addEventListener("click", () => removeBill(b, remove));
+        return el("li", { class: "row" }, [main, remove]);
+      }
+      const li = el("li", { class: "row", role: "button", tabindex: "0" }, [
+        main,
+        el("span", { class: "row-amount num", text: peso.format(result.billTotal) }),
+      ]);
+      onActivate(li, () => openBill(b));
+      return li;
+    }));
+  }
+
   await cloud.flush();
-  const bills = await cloud.list();
+  bills = await cloud.list();
   if (!bills) {
     note.textContent = "Couldn't load your bills. Check your connection and try again.";
     note.classList.add("err");
     return;
   }
-  if (bills.length === 0) {
-    note.textContent = "No saved bills yet. Bills save here as soon as you add someone.";
-    return;
-  }
-  note.hidden = true;
-  list.replaceChildren(...bills.map((b) => {
-    const result = computeSplit(b.data);
-    const current = b.id === state.billId;
-    const li = el("li", { class: "row", role: "button", tabindex: "0" }, [
-      el("div", { class: "row-main" }, [
-        el("span", { class: "row-title", text: billTitle(b.data) }),
-        el("span", { class: "row-sub", text: `${shortDate.format(new Date(b.updated_at))}${current ? " · Open now" : ""}` }),
-      ]),
-      el("span", { class: "row-amount num", text: peso.format(result.billTotal) }),
-    ]);
-    onActivate(li, () => {
-      state = { ...JSON.parse(JSON.stringify(b.data)), billId: b.id };
-      receiptInput.value = state.receiptTotal || "";
-      saveLocal();
-      renderMain();
-      closeSheet();
-      toast(`Opened ${billTitle(b.data)}`);
-    });
-    return li;
-  }));
+  renderRows();
 }
 
 const qrImage = new Image();
@@ -718,7 +906,8 @@ function paintSplit(ctx) {
   for (const r of result.rows) {
     text(r.name, pad, y + 62, 40, 500);
     text(peso.format(r.total), W - pad, y + 62, 40, 600, ink, "right");
-    const sub = result.hasReceipt ? `Food ${peso.format(r.food)} · Service charge ${peso.format(r.extra)}` : `Food ${peso.format(r.food)}`;
+    let sub = result.hasReceipt ? `Food ${peso.format(r.food)} · Service charge ${peso.format(r.extra)}` : `Food ${peso.format(r.food)}`;
+    if (isPayerId(r.id)) sub = `Paid the bill · ${sub}`;
     text(sub, pad, y + 104, 28, 400, muted);
     y += 132;
     line(y);
@@ -739,7 +928,18 @@ function paintSplit(ctx) {
   }
   total("Total", result.billTotal, true);
 
-  if (qrImage.complete && qrImage.naturalWidth > 0) {
+  if (!ownerPaid()) {
+    y += 64;
+    ctx.save();
+    ctx.font = `600 26px ${font}`;
+    if ("letterSpacing" in ctx) ctx.letterSpacing = "4px";
+    ctx.fillStyle = muted;
+    ctx.textAlign = "center";
+    ctx.fillText(`PAID BY ${payeeName().toUpperCase()}`, W / 2, y + 26);
+    ctx.restore();
+    text(`Send your share to ${payeeName()}`, W / 2, y + 96, 36, 600, ink, "center");
+    y += 110;
+  } else if (qrImage.complete && qrImage.naturalWidth > 0) {
     y += 64;
     ctx.save();
     ctx.font = `600 26px ${font}`;
@@ -901,6 +1101,8 @@ $("#share").addEventListener("click", share);
 $("#save-image").addEventListener("click", saveImage);
 $("#gcash-btn").addEventListener("click", () => openQrSheet());
 $("#history-btn").hidden = !cloud.enabled;
+$("#groups-btn").addEventListener("click", openGroupsSheet);
+$("#paid-by").addEventListener("click", openPaidBySheet);
 $("#history-btn").addEventListener("click", openHistorySheet);
 
 $("#new-bill").addEventListener("click", () => {

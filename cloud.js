@@ -28,7 +28,7 @@ const cloud = (() => {
   }
 
   const hasContent = (bill) => bill.people.length > 0 || bill.items.length > 0;
-  const payload = (bill) => ({ receiptTotal: bill.receiptTotal, people: bill.people, items: bill.items });
+  const payload = (bill) => ({ receiptTotal: bill.receiptTotal, people: bill.people, items: bill.items, paidBy: bill.paidBy || null });
 
   let pending = null;
   let timer = null;
@@ -96,16 +96,9 @@ const cloud = (() => {
     return { data: data.data, updatedAt: data.updated_at };
   }
 
-  function payLink(billId, personId) {
-    const url = new URL(location.pathname, location.origin);
-    url.searchParams.set("bill", billId);
-    if (personId) url.searchParams.set("who", personId);
-    return url.toString();
-  }
-
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "hidden") flush();
   });
 
-  return { enabled: !!db, signIn, queueSave, saveNow, isSaved, flush, list, remove, getShared, payLink };
+  return { enabled: !!db, signIn, queueSave, saveNow, isSaved, flush, list, remove, getShared };
 })();
