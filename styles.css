@@ -12,6 +12,7 @@
   --danger: #D92D20;
   --scrim: rgba(0, 0, 0, .28);
   --sheet: #FFFFFF;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --on-danger: #FFFFFF;
 }
 
@@ -240,4 +241,60 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+
+/* ---------- Pay page (opened from a pay link) ---------- */
+.pay-page { display: flex; flex-direction: column; gap: 32px; }
+.pay-head { display: flex; flex-direction: column; gap: 6px; }
+.pay-title { margin: 0; font-size: 34px; font-weight: 700; letter-spacing: -0.02em; }
+.pay-amount { font-size: 52px; font-weight: 500; letter-spacing: -0.03em; line-height: 1.05; }
+.pay-message { display: flex; flex-direction: column; gap: 16px; padding-top: 24px; color: var(--muted); }
+.pay-message p { margin: 0; font-size: 17px; }
+.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.step {
+  display: grid; grid-template-columns: 28px 1fr; gap: 6px 12px; align-items: start;
+  padding: 14px 0; border-bottom: 1px solid var(--line);
+}
+.step-n {
+  width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--solid); color: var(--on-solid); font-size: 13px; font-weight: 700;
+}
+.step-text { font-size: 15px; line-height: 1.4; padding-top: 2px; }
+.step .btn { grid-column: 2; margin-top: 6px; text-decoration: none; }
+a.btn { text-decoration: none; }
+.everyone summary { cursor: pointer; font-size: 15px; font-weight: 600; padding: 6px 0; }
+.everyone .lines { margin-top: 6px; }
+.pay-foot { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+.pay-foot .hint { margin: 0; }
+
+/* ---------- Launch screen ---------- */
+.splash {
+  position: fixed; inset: 0; z-index: 100;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  background: var(--bg);
+  transition: opacity 250ms var(--ease-out), visibility 0s linear 250ms;
+}
+.splash.done { opacity: 0; visibility: hidden; pointer-events: none; }
+.splash-logo { width: 104px; height: 104px; border-radius: 23px; animation: splash-logo 400ms var(--ease-out) both; }
+:root[data-mode="dark"] .splash-logo { box-shadow: 0 0 0 1px var(--line); }
+.splash-name { font-size: 26px; font-weight: 700; letter-spacing: -0.02em; animation: splash-rise 400ms var(--ease-out) 80ms both; }
+.splash-bar {
+  width: 96px; height: 3px; margin-top: 10px; border-radius: 2px; overflow: hidden;
+  background: var(--line); opacity: 0;
+  animation: splash-show 200ms var(--ease-out) 1000ms forwards;
+}
+.splash-bar i { display: block; width: 40%; height: 100%; border-radius: 2px; background: var(--text); animation: splash-slide 1100ms linear infinite; }
+@keyframes splash-logo { from { opacity: 0; transform: scale(0.96); } }
+@keyframes splash-rise { from { opacity: 0; transform: translateY(6px); } }
+@keyframes splash-show { to { opacity: 1; } }
+@keyframes splash-slide { from { transform: translateX(-100%); } to { transform: translateX(250%); } }
+@keyframes splash-fade { from { opacity: 0; } }
+@keyframes splash-pulse { from { opacity: .25; } to { opacity: 1; } }
+
+/* Reduce Motion: keep the fades, drop the movement */
+@media (prefers-reduced-motion: reduce) {
+  .splash { transition: opacity 250ms var(--ease-out), visibility 0s linear 250ms !important; }
+  .splash-logo, .splash-name { animation: splash-fade 300ms var(--ease-out) both !important; }
+  .splash-bar { animation: splash-show 200ms var(--ease-out) 1000ms forwards !important; }
+  .splash-bar i { width: 100%; animation: splash-pulse 1400ms linear infinite alternate !important; }
 }

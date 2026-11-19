@@ -8,6 +8,28 @@ const GCASH = {
 };
 const THEME_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 1 0 17z" fill="currentColor" stroke="none"/></svg>';
 
+// Launch screen: stays at least 0.9 s from launch and until every hold is released (8 s at most)
+const splash = (() => {
+  const node = document.getElementById("splash");
+  const MIN_MS = 900, MAX_MS = 8000;
+  let holds = 0;
+  let finished = !node;
+  function finish() {
+    if (finished) return;
+    finished = true;
+    setTimeout(() => {
+      node.classList.add("done");
+      setTimeout(() => node.remove(), 400);
+    }, Math.max(0, MIN_MS - performance.now()));
+  }
+  setTimeout(finish, MAX_MS);
+  return {
+    hold() { holds++; },
+    release() { holds = Math.max(0, holds - 1); if (holds === 0) finish(); },
+  };
+})();
+splash.hold();
+
 const peso = new Intl.NumberFormat("en-PH", {
   style: "currency",
   currency: "PHP",
@@ -23,7 +45,7 @@ function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (saved && Array.isArray(saved.people) && Array.isArray(saved.items)) {
-      return { receiptTotal: saved.receiptTotal || "", people: saved.people, items: saved.items };
+      return { receiptTotal: saved.receiptTotal || "", people: saved.people, items: saved.items, billId: saved.billId };
     }
   } catch (e) {}
   if (window.PAYUP_SAMPLE) return { ...JSON.parse(JSON.stringify(window.PAYUP_SAMPLE)), sample: true };
@@ -32,11 +54,26 @@ function loadState() {
 
 let state = loadState();
 
-function persist() {
-  delete state.sample;
+function uuid() {
+  if (crypto.randomUUID) return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, "0")).join("");
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
+function saveLocal() {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (e) {}
+}
+
+function persist() {
+  delete state.sample;
+  if (cloud.enabled && !state.billId && (state.people.length || state.items.length)) state.billId = uuid();
+  saveLocal();
+  cloud.queueSave(state);
 }
 
 function newId() {
@@ -259,7 +296,8 @@ const scrim = $("#scrim");
 let sheetTimer;
 
 function setBarButton(button, config) {
-  button.hidden = !config;
+  button.style.visibility = config ? "" : "hidden";
+  button.disabled = !config;
   if (!config) return;
   button.textContent = config.label;
   button.onclick = config.onClick;
@@ -497,7 +535,8 @@ function openPersonSheet(id) {
       field("Name", nameInput),
       field("Items", el("div", { class: "lines" }, itemLines)),
       el("div", { class: "lines" }, totals),
-      el("button", { type: "button", class: "btn btn-solid", text: "Show GCash QR", onclick: () => applyName() && openQrSheet(id) }),
+      cloud.enabled ? el("button", { type: "button", class: "btn btn-solid", text: "Send pay link", onclick: () => applyName() && sendPayLink(id) }) : null,
+      el("button", { type: "button", class: cloud.enabled ? "btn btn-outline" : "btn btn-solid", text: "Show GCash QR", onclick: () => applyName() && openQrSheet(id) }),
       el("button", { type: "button", class: "btn btn-danger", text: "Remove person", onclick: () => removePerson(id) }),
     ],
   });
@@ -532,9 +571,14 @@ function openQrSheet(personId = null) {
 
 /* ---------- Sharing and messages ---------- */
 
-function summaryText() {
+function summaryText(withLinks = false) {
   const result = computeSplit(state);
-  const lines = ["PayUp", ...result.rows.map((r) => `${r.name}: ${peso.format(r.total)}`), ""];
+  const lines = ["PayUp"];
+  for (const r of result.rows) {
+    lines.push(`${r.name}: ${peso.format(r.total)}`);
+    if (withLinks) lines.push(`Pay here: ${cloud.payLink(state.billId, r.id)}`);
+  }
+  lines.push("");
   lines.push(`Food: ${peso.format(result.itemsTotal)}`);
   if (result.hasReceipt) {
     lines.push(`${result.extra >= 0 ? "Service charge" : "Discount"}: ${peso.format(result.extra)}`);
@@ -548,7 +592,19 @@ async function share() {
     toast("Add people and items first");
     return;
   }
-  const text = summaryText();
+  const withLinks = cloud.enabled && (await ensureSaved());
+  await shareText(summaryText(withLinks));
+}
+
+async function ensureSaved() {
+  if (!state.billId) persist();
+  if (cloud.isSaved(state)) return true;
+  const ok = await cloud.saveNow(state);
+  if (!ok) toast("Couldn't save the bill online, so the links are left out");
+  return ok;
+}
+
+async function shareText(text) {
   const framed = window.self !== window.top;
   if (navigator.share && !framed) {
     try {
@@ -564,6 +620,63 @@ async function share() {
   } catch (e) {
     showSplitText(text);
   }
+}
+
+async function sendPayLink(personId) {
+  if (!(await ensureSaved())) return;
+  const result = computeSplit(state);
+  const index = state.people.findIndex((p) => p.id === personId);
+  const row = result.rows[index];
+  await shareText(`${row.name}, your share is ${peso.format(row.total)}. Pay here: ${cloud.payLink(state.billId, personId)}`);
+}
+
+/* ---------- History ---------- */
+
+function billTitle(data) {
+  const names = data.people.map((p) => p.name);
+  if (names.length === 0) return "Bill with no people yet";
+  if (names.length <= 3) return names.join(", ");
+  return `${names.slice(0, 3).join(", ")} +${names.length - 3}`;
+}
+
+const shortDate = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+
+async function openHistorySheet() {
+  const note = el("p", { class: "note", text: "Loading your bills..." });
+  const list = el("ul", { class: "list" });
+  openSheet({ title: "History", left: null, right: { label: "Done", onClick: closeSheet }, body: [note, list] });
+  await cloud.flush();
+  const bills = await cloud.list();
+  if (!bills) {
+    note.textContent = "Couldn't load your bills. Check your connection and try again.";
+    note.classList.add("err");
+    return;
+  }
+  if (bills.length === 0) {
+    note.textContent = "No saved bills yet. Bills save here as soon as you add someone.";
+    return;
+  }
+  note.hidden = true;
+  list.replaceChildren(...bills.map((b) => {
+    const result = computeSplit(b.data);
+    const current = b.id === state.billId;
+    const li = el("li", { class: "row", role: "button", tabindex: "0" }, [
+      el("div", { class: "row-main" }, [
+        el("span", { class: "row-title", text: billTitle(b.data) }),
+        el("span", { class: "row-sub", text: `${shortDate.format(new Date(b.updated_at))}${current ? " · Open now" : ""}` }),
+      ]),
+      el("span", { class: "row-amount num", text: peso.format(result.billTotal) }),
+    ]);
+    onActivate(li, () => {
+      state = { ...JSON.parse(JSON.stringify(b.data)), billId: b.id };
+      receiptInput.value = state.receiptTotal || "";
+      saveLocal();
+      renderMain();
+      closeSheet();
+      toast(`Opened ${billTitle(b.data)}`);
+    });
+    return li;
+  }));
 }
 
 const qrImage = new Image();
@@ -777,14 +890,19 @@ receiptInput.addEventListener("input", () => {
 $("#share").addEventListener("click", share);
 $("#save-image").addEventListener("click", saveImage);
 $("#gcash-btn").addEventListener("click", () => openQrSheet());
+$("#history-btn").hidden = !cloud.enabled;
+$("#history-btn").addEventListener("click", openHistorySheet);
 
 $("#new-bill").addEventListener("click", () => {
   if (state.items.length === 0 && state.people.length === 0 && !state.receiptTotal) return;
   confirmAction({
     title: "Clear all",
-    message: "This removes everyone, all items and the receipt total.",
+    message: cloud.enabled
+      ? "This starts a new, empty bill. The current bill stays in History."
+      : "This removes everyone, all items and the receipt total.",
     confirmLabel: "Clear everything",
     onConfirm: () => {
+      cloud.flush();
       state = defaultState();
       receiptInput.value = "";
       persist();
@@ -795,6 +913,8 @@ $("#new-bill").addEventListener("click", () => {
 });
 
 renderMain();
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", () => splash.release());
+else splash.release();
 
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", () => {
