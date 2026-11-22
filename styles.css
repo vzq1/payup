@@ -58,14 +58,23 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 .app {
   max-width: 480px;
   margin: 0 auto;
-  padding: calc(20px + env(safe-area-inset-top, 0px)) 20px calc(56px + env(safe-area-inset-bottom, 0px));
+  padding: calc(20px + env(safe-area-inset-top, 0px)) 20px calc(120px + env(safe-area-inset-bottom, 0px));
   display: flex;
   flex-direction: column;
   gap: 44px;
 }
 
 /* ---------- Header ---------- */
-.top { display: flex; align-items: center; justify-content: space-between; }
+.top {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: space-between;
+  margin: calc(-20px - env(safe-area-inset-top, 0px)) -20px 0;
+  padding: calc(12px + env(safe-area-inset-top, 0px)) 20px 12px;
+  background: var(--bg);
+  border-bottom: 1px solid transparent;
+  transition: background-color .25s ease, border-color .2s ease;
+}
+.top.scrolled { border-bottom-color: var(--line); }
 .wordmark { font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
 .top-actions { display: flex; align-items: center; gap: 16px; }
 .icon-btn { width: 32px; height: 32px; display: grid; place-items: center; }
@@ -111,6 +120,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
   transition: opacity .15s ease;
 }
 .btn:active { opacity: .7; }
+.btn:disabled { opacity: .35; pointer-events: none; }
 .btn-solid { background: var(--solid); color: var(--on-solid); }
 .btn-outline { border: 1px solid var(--line-strong); }
 .btn-danger { color: var(--danger); font-weight: 500; }
@@ -234,7 +244,7 @@ button:focus-visible, input:focus-visible, [tabindex]:focus-visible { outline: 2
 
 /* ---------- Toast ---------- */
 .toast {
-  position: fixed; z-index: 40; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+  position: fixed; z-index: 40; left: 50%; bottom: calc(96px + env(safe-area-inset-bottom, 0px));
   max-width: calc(100% - 40px); padding: 10px 16px; border-radius: 999px;
   background: var(--solid); color: var(--on-solid); font-size: 14px; text-align: center;
   opacity: 0; transform: translate(-50%, 8px); pointer-events: none;
@@ -325,12 +335,32 @@ a.btn { text-decoration: none; }
   position: relative; z-index: 1; display: flex; align-items: center; gap: 12px;
   min-height: 64px; padding: 12px 0;
 }
-.row.swipe.moving .swipe-inner { background: var(--row-bg, var(--bg)); }
+.row.swipe.moving .swipe-inner { background: var(--row-bg, var(--bg)); will-change: transform; }
 .row.swipe:not(.moving) .swipe-action { visibility: hidden; }
-.swipe-inner:active { opacity: .55; }
+.swipe-inner:active { opacity: .55; transition: opacity 0s 90ms; }
 .row.swipe.dragged .swipe-inner, .row.swipe.moving .swipe-inner { opacity: 1; }
 .sheet { --row-bg: var(--sheet); }
 .swipe-action {
   position: absolute; top: 0; right: 0; bottom: 0; width: 88px;
   background: var(--danger); color: var(--on-danger); font-size: 15px; font-weight: 600;
 }
+
+/* + button and the step-by-step guide */
+.fab {
+  position: fixed; z-index: 25; left: 50%; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  width: 60px; height: 60px; margin-left: -30px; border-radius: 50%;
+  display: grid; place-items: center;
+  background: var(--solid); color: var(--on-solid);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, .18), 0 1px 3px rgba(0, 0, 0, .12);
+  transition: transform 140ms var(--ease-out), background-color .25s ease, color .25s ease;
+}
+.fab:active { transform: scale(.94); }
+body.sheet-open .fab { visibility: hidden; }
+.guide-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: -12px; }
+.guide-steps i { height: 3px; border-radius: 2px; background: var(--line); }
+.guide-steps i.on { background: var(--text); }
+.guide-q { margin: 0 0 -16px; font-size: 24px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.2; }
+.guide-add { display: flex; align-items: center; gap: 12px; }
+.guide-add .line-input { flex: 1; min-width: 0; }
+.chip.removable { display: inline-flex; align-items: center; gap: 8px; padding-right: 12px; }
+.chip-x { color: var(--muted); font-size: 18px; line-height: 1; }

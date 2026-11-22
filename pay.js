@@ -7,6 +7,7 @@
   const page = document.getElementById("pay-page");
   const body = document.getElementById("pay-body");
   editor.hidden = true;
+  document.getElementById("guide-btn").hidden = true;
   page.hidden = false;
   document.title = "Pay Bon · PayUp";
 

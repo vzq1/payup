@@ -102,7 +102,7 @@ function loadState() {
   try {
     const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (saved && Array.isArray(saved.people) && Array.isArray(saved.items)) {
-      return { receiptTotal: saved.receiptTotal || "", people: saved.people, items: saved.items, billId: saved.billId, paidBy: saved.paidBy || null };
+      return { receiptTotal: saved.receiptTotal || "", people: saved.people, items: saved.items, billId: saved.billId, paidBy: saved.paidBy || null, guide: saved.guide || null };
     }
   } catch (e) {}
   if (window.PAYUP_SAMPLE) return { ...JSON.parse(JSON.stringify(window.PAYUP_SAMPLE)), sample: true };
@@ -158,6 +158,8 @@ function el(tag, props = {}, children = []) {
 }
 
 // Slide a row left to reveal Remove; slide all the way to remove it straight away.
+// Touch uses touch events so the row can stop the page from scrolling once the
+// slide is clearly sideways; a mouse uses pointer events.
 let openSwipe = null;
 document.addEventListener("pointerdown", (e) => {
   if (openSwipe && !openSwipe.li.contains(e.target)) openSwipe.close();
@@ -171,15 +173,31 @@ function swipeToRemove(li, onRemove) {
   li.classList.add("swipe");
   li.append(action, inner);
 
-  let startX = 0, startY = 0, offset = 0, base = 0, tracking = false, horizontal = null, swiped = false, settle = 0;
+  let startX = 0, startY = 0, offset = 0, base = 0, tracking = false, horizontal = null, swiped = false;
+  let settle = 0, frame = 0, target = 0, lastX = 0, lastT = 0, velocity = 0;
+  const paint = () => {
+    frame = 0;
+    inner.style.transform = target ? `translate3d(${target}px,0,0)` : "";
+  };
   const move = (x, animate) => {
     offset = x;
+    target = x;
     clearTimeout(settle);
     if (x) li.classList.add("moving");
-    else if (animate) settle = setTimeout(() => li.classList.remove("moving"), 240);
-    else li.classList.remove("moving");
-    inner.style.transition = animate ? "transform 220ms var(--ease-out)" : "none";
-    inner.style.transform = x ? `translateX(${x}px)` : "";
+    else if (animate) settle = setTimeout(() => { li.classList.remove("moving"); inner.style.transition = ""; }, 260);
+    else { li.classList.remove("moving"); inner.style.transition = ""; }
+    if (animate) {
+      if (frame) cancelAnimationFrame(frame);
+      frame = 0;
+      inner.style.transition = "transform 240ms var(--ease-out)";
+      paint();
+    } else if (x) {
+      inner.style.transition = "none";
+      if (!frame) frame = requestAnimationFrame(paint);
+    } else {
+      if (frame) cancelAnimationFrame(frame);
+      paint();
+    }
   };
   const api = { li, close: () => { move(0, true); if (openSwipe === api) openSwipe = null; } };
   const remove = () => {
@@ -188,46 +206,70 @@ function swipeToRemove(li, onRemove) {
     move(0, false);
   };
 
-  li.addEventListener("pointerdown", (e) => {
-    if (e.pointerType === "mouse" && e.button !== 0) return;
-    if (action.contains(e.target)) return;
-    startX = e.clientX; startY = e.clientY;
+  const begin = (x, y) => {
+    startX = lastX = x; startY = y; lastT = performance.now(); velocity = 0;
     base = offset; tracking = true; horizontal = null; swiped = false;
-  });
-  li.addEventListener("pointermove", (e) => {
-    if (!tracking) return;
-    const dx = e.clientX - startX, dy = e.clientY - startY;
+  };
+  // returns true while the row is following the finger
+  const follow = (x, y) => {
+    if (!tracking) return false;
+    const dx = x - startX, dy = y - startY;
     if (horizontal === null) {
-      if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+      if (Math.abs(dx) < 6 && Math.abs(dy) < 6) return false;
       horizontal = Math.abs(dx) > Math.abs(dy);
-      if (!horizontal) { tracking = false; return; }
+      if (!horizontal) { tracking = false; return false; }
       li.classList.add("dragged");
-      li.setPointerCapture(e.pointerId);
       swiped = true;
       // sliding right on a closed row does nothing
-      if (dx > 0 && base === 0) { tracking = false; return; }
+      if (dx > 0 && base === 0) { tracking = false; return false; }
       if (openSwipe && openSwipe !== api) openSwipe.close();
     }
+    const now = performance.now();
+    if (now > lastT) velocity = 0.7 * ((x - lastX) / (now - lastT)) + 0.3 * velocity;
+    lastX = x; lastT = now;
     move(Math.min(0, base + dx), false);
-  });
+    return true;
+  };
   const end = () => {
     li.classList.remove("dragged");
     if (!tracking || !horizontal) { tracking = false; return; }
     tracking = false;
     swiped = true;
     const width = li.offsetWidth;
-    if (offset < -width * 0.55) {
+    const flick = Math.abs(velocity) > 0.4;
+    if (offset < -width * 0.55 && !(flick && velocity > 0)) {
       move(-width, true);
-      setTimeout(remove, 200);
-    } else if (offset < -ACTION / 2) {
+      setTimeout(remove, 220);
+    } else if (flick ? velocity < 0 : offset < -ACTION / 2 && offset - base < 12) {
       move(-ACTION, true);
       openSwipe = api;
     } else {
       api.close();
     }
   };
-  li.addEventListener("pointerup", end);
-  li.addEventListener("pointercancel", end);
+
+  li.addEventListener("touchstart", (e) => {
+    if (e.touches.length !== 1) { tracking = false; return; }
+    begin(e.touches[0].clientX, e.touches[0].clientY);
+  }, { passive: true });
+  li.addEventListener("touchmove", (e) => {
+    if (follow(e.touches[0].clientX, e.touches[0].clientY) && e.cancelable) e.preventDefault();
+  }, { passive: false });
+  li.addEventListener("touchend", end);
+  li.addEventListener("touchcancel", end);
+
+  li.addEventListener("pointerdown", (e) => {
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    begin(e.clientX, e.clientY);
+  });
+  li.addEventListener("pointermove", (e) => {
+    if (e.pointerType !== "mouse") return;
+    follow(e.clientX, e.clientY);
+    if (horizontal && !li.hasPointerCapture(e.pointerId)) li.setPointerCapture(e.pointerId);
+  });
+  li.addEventListener("pointerup", (e) => e.pointerType === "mouse" && end());
+  li.addEventListener("pointercancel", (e) => e.pointerType === "mouse" && end());
+
   // a swipe, or a tap on a row that's slid open, shouldn't also open the row
   li.addEventListener("click", (e) => {
     if (action.contains(e.target)) return;
@@ -240,6 +282,10 @@ function swipeToRemove(li, onRemove) {
   }, true);
   action.addEventListener("click", (e) => {
     e.stopPropagation();
+    if (swiped) {
+      swiped = false;
+      return;
+    }
     remove();
   });
   return li;
@@ -429,7 +475,7 @@ function addPerson(name) {
   return true;
 }
 
-function removePerson(id) {
+function removePerson(id, after = closeSheet) {
   const person = state.people.find((p) => p.id === id);
   const used = state.items.some((i) => i.people.includes(id));
   const remove = () => {
@@ -441,7 +487,7 @@ function removePerson(id) {
     }
     persist();
     renderMain();
-    closeSheet();
+    after();
   };
   if (!used) {
     remove();
@@ -1329,6 +1375,7 @@ receiptInput.addEventListener("keydown", (e) => {
 $("#share").addEventListener("click", share);
 $("#save-image").addEventListener("click", saveImage);
 $("#gcash-btn").addEventListener("click", () => openQrSheet());
+$("#guide-btn").addEventListener("click", openGuide);
 $("#history-btn").hidden = !cloud.enabled;
 $("#groups-btn").addEventListener("click", openGroupsSheet);
 $("#paid-by").addEventListener("click", openPaidBySheet);
@@ -1362,3 +1409,279 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(() => {});
   });
 }
+
+/* ---------- Guide: the + button asks one question at a time ---------- */
+// Answers go straight into the bill as they're typed, and state.guide keeps the
+// step, so closing the guide and tapping + later picks up where it stopped.
+
+function guideItem() {
+  return state.guide && state.items.find((i) => i.id === state.guide.itemId);
+}
+function setGuide(step, extra = {}) {
+  state.guide = { itemId: null, ...(state.guide || {}), step, ...extra };
+  saveLocal();
+}
+function dropEmptyGuideItem() {
+  const item = guideItem();
+  if (item && !item.name.trim() && !toNumber(item.price) && item.people.length === 0) {
+    state.items = state.items.filter((i) => i.id !== item.id);
+    state.guide.itemId = null;
+    persist();
+    renderMain();
+  }
+}
+function itemDone(i) {
+  return i.name.trim() && toNumber(i.price) > 0 && i.people.length > 0;
+}
+
+function openGuide() {
+  const g = state.guide;
+  if (g && g.step) {
+    if (g.step.startsWith("item-") && g.step !== "item-name" && !guideItem()) return showGuide("item-name");
+    return showGuide(g.step);
+  }
+  if (!state.receiptTotal && state.people.length === 0) return showGuide("total");
+  if (state.people.length === 0) return showGuide("people");
+  return startGuideItem();
+}
+
+function startGuideItem() {
+  state.guide = { step: "item-name", itemId: null };
+  saveLocal();
+  showGuide("item-name");
+}
+
+function guideInput(props, value, onInput, onEnter) {
+  const input = el("input", { type: "text", autocomplete: "off", ...props });
+  input.value = value || "";
+  input.addEventListener("input", () => onInput(input.value));
+  input.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter" || e.isComposing) return;
+    e.preventDefault();
+    onEnter();
+  });
+  return input;
+}
+
+function showGuide(step) {
+  setGuide(step);
+  const section = step === "total" ? 0 : step === "people" ? 1 : step === "done" ? 3 : 2;
+  const progress = el("div", { class: "guide-steps", "aria-hidden": "true" },
+    [0, 1, 2].map((i) => el("i", { class: i <= section ? "on" : "" })));
+  const ask = (text) => el("h3", { class: "guide-q", text });
+  const next = (label, onClick, disabled = false) =>
+    el("button", { type: "button", class: "btn btn-solid", text: label, onclick: onClick, ...(disabled ? { disabled: "" } : {}) });
+  const close = { label: "Close", onClick: closeSheet };
+  let title = "", back = null, body = [], focus = null;
+
+  if (step === "total") {
+    title = "Receipt";
+    const input = guideInput(
+      { class: "num", inputmode: "decimal", enterkeyhint: "next", placeholder: "0.00", "aria-label": "Receipt total" },
+      state.receiptTotal,
+      (v) => {
+        state.receiptTotal = v;
+        receiptInput.value = v;
+        persist();
+        renderMain();
+      },
+      () => showGuide("people"),
+    );
+    focus = input;
+    body = [
+      ask("What's the receipt total?"),
+      el("p", { class: "note", text: "The amount at the bottom of the receipt, service charge included. You can skip this and add it later." }),
+      el("div", { class: "amount-input" }, [el("span", { text: "₱" }), input]),
+      next("Next", () => showGuide("people")),
+    ];
+  } else if (step === "people") {
+    title = "People";
+    back = { label: "Back", onClick: () => showGuide("total") };
+    const list = el("div", { class: "chips" });
+    const nextBtn = next("Next", () => {
+      if (input.value.trim() && !addFromInput()) return;
+      if (state.people.length === 0) return;
+      startGuideItem();
+    });
+    const refresh = () => {
+      list.replaceChildren(...state.people.map((p) => el("button", {
+        type: "button", class: "chip removable", "aria-label": `Remove ${p.name}`,
+        onclick: () => removePerson(p.id, () => showGuide("people")),
+      }, [el("span", { text: p.name }), el("span", { class: "chip-x", text: "×" })])));
+      list.hidden = state.people.length === 0;
+      nextBtn.disabled = state.people.length === 0 && !input.value.trim();
+    };
+    const addFromInput = () => {
+      if (!input.value.trim()) return false;
+      if (!addPerson(input.value)) return false;
+      input.value = "";
+      setGuide("people", { draft: "" });
+      refresh();
+      input.blur();
+      input.focus();
+      return true;
+    };
+    const input = guideInput(
+      { class: "line-input", maxlength: "30", autocapitalize: "words", enterkeyhint: "done", placeholder: "Name", "aria-label": "Name" },
+      state.guide.draft,
+      (v) => {
+        setGuide("people", { draft: v });
+        nextBtn.disabled = state.people.length === 0 && !v.trim();
+      },
+      () => {
+        if (input.value.trim()) addFromInput();
+        else if (state.people.length) startGuideItem();
+      },
+    );
+    focus = input;
+    const groups = loadGroups();
+    body = [
+      ask(state.people.length ? "Anyone else?" : "Who's splitting the bill?"),
+      el("p", { class: "note", text: "Type a name, then tap Add. Add everyone, you included." }),
+      el("div", { class: "guide-add" }, [input, el("button", { type: "button", class: "text-btn", text: "Add", onclick: () => { addFromInput(); } })]),
+      list,
+      groups.length ? field("Saved groups", el("div", { class: "chips" }, groups.map((g) => el("button", {
+        type: "button", class: "chip", text: g.name,
+        onclick: () => {
+          const have = new Set(state.people.map((p) => p.name.toLowerCase()));
+          const adding = g.people.filter((n) => !have.has(n.toLowerCase()));
+          for (const n of adding) state.people.push({ id: newId(), name: n });
+          if (adding.length) {
+            persist();
+            renderMain();
+          }
+          refresh();
+          toast(adding.length ? `Added ${adding.join(", ")}` : `Everyone in ${g.name} is already on this bill`);
+        },
+      })))) : null,
+      nextBtn,
+    ];
+    refresh();
+  } else if (step === "item-name") {
+    const item = guideItem();
+    const number = item ? state.items.indexOf(item) + 1 : state.items.length + 1;
+    title = `Item ${number}`;
+    back = { label: "Back", onClick: () => { dropEmptyGuideItem(); showGuide("people"); } };
+    const finished = state.items.some((i) => i !== item && itemDone(i));
+    const nextBtn = next("Next", () => guideItem() && guideItem().name.trim() && showGuide("item-price"), !(item && item.name.trim()));
+    const input = guideInput(
+      { class: "line-input", maxlength: "40", enterkeyhint: "next", placeholder: "e.g. Pizza", "aria-label": "Item name" },
+      item ? item.name : "",
+      (v) => {
+        let it = guideItem();
+        if (!it) {
+          it = { id: newId(), name: "", price: "", people: [], custom: false, shares: {} };
+          state.items.push(it);
+          setGuide("item-name", { itemId: it.id });
+        }
+        it.name = v;
+        persist();
+        renderMain();
+        nextBtn.disabled = !v.trim();
+      },
+      () => guideItem() && guideItem().name.trim() && showGuide("item-price"),
+    );
+    focus = input;
+    body = [
+      ask(number === 1 ? "What's the first item?" : "What's the next item?"),
+      el("p", { class: "note", text: "One dish or drink at a time, as it's written on the receipt." }),
+      input,
+      nextBtn,
+      finished ? el("button", { type: "button", class: "btn btn-outline", text: "That's everything", onclick: () => { dropEmptyGuideItem(); showGuide("done"); } }) : null,
+    ];
+  } else if (step === "item-price") {
+    const item = guideItem();
+    title = item.name.trim() || "Item";
+    back = { label: "Back", onClick: () => showGuide("item-name") };
+    const nextBtn = next("Next", () => toNumber(item.price) > 0 && showGuide("item-who"), !(toNumber(item.price) > 0));
+    const input = guideInput(
+      { class: "num", inputmode: "decimal", enterkeyhint: "next", placeholder: "0.00", "aria-label": "Price" },
+      item.price,
+      (v) => {
+        item.price = v;
+        persist();
+        renderMain();
+        nextBtn.disabled = !(toNumber(v) > 0);
+      },
+      () => toNumber(item.price) > 0 && showGuide("item-who"),
+    );
+    focus = input;
+    body = [
+      ask(`How much was the ${item.name.trim()}?`),
+      el("p", { class: "note", text: "The menu price. If you got more than one, enter the total for all of them." }),
+      el("label", { class: "price" }, [el("span", { text: "₱" }), input]),
+      nextBtn,
+    ];
+  } else if (step === "item-who") {
+    const item = guideItem();
+    title = item.name.trim() || "Item";
+    back = { label: "Back", onClick: () => showGuide("item-price") };
+    if (item.people.length === 0 && state.people.length === 1) {
+      item.people = [state.people[0].id];
+      persist();
+      renderMain();
+    }
+    const chips = el("div", { class: "chips" });
+    const everyone = el("button", { type: "button", class: "text-btn" });
+    const anotherBtn = next("Add another item", () => item.people.length && startGuideItem());
+    const doneBtn = el("button", { type: "button", class: "btn btn-outline", text: "That's everything", onclick: () => item.people.length && showGuide("done") });
+    const refresh = () => {
+      const all = state.people.length > 0 && state.people.every((p) => item.people.includes(p.id));
+      everyone.textContent = all ? "Clear" : "Everyone";
+      everyone.hidden = state.people.length < 2;
+      everyone.onclick = () => {
+        item.people = all ? [] : state.people.map((p) => p.id);
+        persist();
+        renderMain();
+        refresh();
+      };
+      chips.replaceChildren(...state.people.map((p) => {
+        const on = item.people.includes(p.id);
+        return el("button", {
+          type: "button", class: "chip", "aria-pressed": String(on), text: p.name,
+          onclick: () => {
+            item.people = on ? item.people.filter((id) => id !== p.id) : state.people.map((x) => x.id).filter((id) => id === p.id || item.people.includes(id));
+            persist();
+            renderMain();
+            refresh();
+          },
+        });
+      }));
+      anotherBtn.disabled = doneBtn.disabled = item.people.length === 0;
+    };
+    refresh();
+    body = [
+      ask(`Who had the ${item.name.trim()}?`),
+      el("p", { class: "note", text: "Pick everyone who shared it. It's split evenly between them." }),
+      field("People", chips, everyone),
+      anotherBtn,
+      doneBtn,
+    ];
+  } else {
+    title = "All set";
+    const last = [...state.items].reverse().find(itemDone);
+    back = last ? { label: "Back", onClick: () => { state.guide.itemId = last.id; showGuide("item-who"); } } : null;
+    const result = computeSplit(state);
+    body = [
+      ask("Here's what everyone pays"),
+      el("div", { class: "lines" }, [
+        ...result.rows.map((r) => line(isPayerId(r.id) ? `${r.name} (paid the bill)` : r.name, r.total)),
+        line("Total", result.billTotal, "total"),
+      ]),
+      result.hasReceipt ? null : el("p", { class: "note", text: "No receipt total yet, so these don't include the service charge." }),
+      result.unassigned ? el("p", { class: "note err", text: $("#items-note").textContent }) : null,
+      next("Share split", share),
+      el("button", { type: "button", class: "btn btn-outline", text: "Save image", onclick: saveImage }),
+      el("button", { type: "button", class: "btn btn-outline", text: "Add another item", onclick: startGuideItem }),
+    ];
+  }
+
+  openSheet({ title, left: back, right: close, body: [progress, ...body] });
+  if (focus) focus.focus();
+}
+
+// The header stays put; a hairline shows under it once the page scrolls.
+const tops = document.querySelectorAll(".top");
+const markScrolled = () => tops.forEach((t) => t.classList.toggle("scrolled", window.scrollY > 4));
+window.addEventListener("scroll", markScrolled, { passive: true });
+markScrolled();
