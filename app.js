@@ -174,8 +174,12 @@ function swipeToRemove(li, onRemove, extra = null) {
   const OPEN = EDGE + BTN + (extra ? BTN + GAP : 0);
   const inner = el("div", { class: "swipe-inner" });
   while (li.firstChild) inner.append(li.firstChild);
-  const action = el("button", { type: "button", class: "swipe-btn swipe-action", tabindex: "-1", "aria-label": "Remove" });
-  action.innerHTML = TRASH_ICON;
+  // The red pill is a fixed 44px button drawn as two caps and a middle, so it can
+  // stretch with transforms only (no layout work while the finger moves).
+  const capL = el("i", { class: "pill-l" }), mid = el("i", { class: "pill-m" }), capR = el("i", { class: "pill-r" });
+  const icon = el("span", { class: "pill-icon" });
+  icon.innerHTML = TRASH_ICON;
+  const action = el("button", { type: "button", class: "swipe-btn swipe-action", tabindex: "-1", "aria-label": "Remove" }, [capL, mid, capR, icon]);
   const alt = extra ? el("button", { type: "button", class: "swipe-btn swipe-alt", tabindex: "-1", "aria-label": extra.label }) : null;
   if (alt) alt.innerHTML = SHARE_ICON;
   const actions = el("div", { class: "swipe-actions" }, [alt, action]);
@@ -183,8 +187,10 @@ function swipeToRemove(li, onRemove, extra = null) {
   li.append(actions, inner);
 
   let startX = 0, startY = 0, offset = 0, base = 0, tracking = false, horizontal = null, swiped = false;
-  let settle = 0, frame = 0, target = 0, lastX = 0, lastT = 0, velocity = 0, armed = false;
-  const armAt = () => Math.max(OPEN + 60, li.offsetWidth * 0.6);
+  let settle = 0, frame = 0, target = 0, lastX = 0, lastT = 0, velocity = 0, armed = false, armTimer = 0;
+  let width = 0;
+  const rowWidth = () => width || (width = li.offsetWidth);
+  const armAt = () => Math.max(OPEN + 60, rowWidth() * 0.6);
 
   // Lay out the buttons for how far the row is open.
   const paint = () => {
@@ -194,19 +200,20 @@ function swipeToRemove(li, onRemove, extra = null) {
     const grow = Math.min(1, reveal / OPEN);
     const scale = 0.35 + 0.65 * grow;
     const fade = Math.min(1, grow * 1.6);
-    const red = armed ? Math.max(BTN, reveal - EDGE) : BTN + Math.max(0, reveal - OPEN);
-    action.style.width = `${red}px`;
+    const stretch = armed ? Math.max(0, reveal - EDGE - BTN) : Math.max(0, reveal - OPEN);
     action.style.transform = `scale(${scale})`;
     action.style.opacity = fade;
+    capL.style.transform = `translate3d(${-stretch}px,0,0)`;
+    mid.style.transform = `scaleX(${stretch + 2})`;
+    icon.style.transform = `translate3d(${-stretch / 2}px,0,0)`;
     if (alt) {
-      alt.style.transform = `translateX(${-(BTN + GAP + Math.max(0, reveal - OPEN))}px) scale(${armed ? 0.6 : scale})`;
+      alt.style.transform = `translate3d(${-(BTN + GAP + Math.max(0, reveal - OPEN))}px,0,0) scale(${armed ? 0.6 : scale})`;
       alt.style.opacity = armed ? 0 : fade;
     }
   };
-  const setTransitions = (value) => {
-    inner.style.transition = value;
-    action.style.transition = value && value !== "none" ? value.replace("transform", "transform") + ", width 240ms var(--ease-out), opacity 200ms ease" : value;
-    if (alt) alt.style.transition = action.style.transition;
+  const motion = (mode) => {
+    li.classList.toggle("swipe-anim", mode === "anim");
+    li.classList.toggle("swipe-arm", mode === "arm");
   };
   const move = (x, animate) => {
     offset = x;
@@ -215,22 +222,25 @@ function swipeToRemove(li, onRemove, extra = null) {
     const wasArmed = armed;
     armed = x < 0 && -x > armAt();
     if (x) li.classList.add("moving");
-    const clear = () => { li.classList.remove("moving"); setTransitions(""); };
     if (!x) {
+      const clear = () => { li.classList.remove("moving"); motion(null); width = 0; };
       if (animate) settle = setTimeout(clear, 260);
       else clear();
     }
     if (animate) {
       if (frame) cancelAnimationFrame(frame);
       frame = 0;
-      setTransitions("transform 240ms var(--ease-out)");
+      clearTimeout(armTimer);
+      motion("anim");
       paint();
     } else if (x) {
-      setTransitions("none");
-      // crossing the delete point snaps the buttons, so let just that change animate
+      // crossing the delete point snaps the pill, so let that one change ease in
       if (wasArmed !== armed) {
-        action.style.transition = "width 180ms var(--ease-out), opacity 150ms ease";
-        if (alt) alt.style.transition = "transform 180ms var(--ease-out), opacity 150ms ease";
+        motion("arm");
+        clearTimeout(armTimer);
+        armTimer = setTimeout(() => motion(null), 200);
+      } else if (!li.classList.contains("swipe-arm")) {
+        motion(null);
       }
       if (!frame) frame = requestAnimationFrame(paint);
     } else {
@@ -249,6 +259,7 @@ function swipeToRemove(li, onRemove, extra = null) {
   const begin = (x, y) => {
     startX = lastX = x; startY = y; lastT = performance.now(); velocity = 0;
     base = offset; tracking = true; horizontal = null; swiped = false;
+    width = li.offsetWidth;
   };
   // returns true while the row is following the finger
   const follow = (x, y) => {
@@ -269,8 +280,8 @@ function swipeToRemove(li, onRemove, extra = null) {
     lastX = x; lastT = now;
     let next = base + dx;
     // a little resistance past the edge of the row
-    const width = li.offsetWidth;
-    if (next < -width) next = -width - (-width - next) * 0.25;
+    const w = rowWidth();
+    if (next < -w) next = -w - (-w - next) * 0.25;
     move(Math.min(0, next), false);
     return true;
   };
@@ -281,7 +292,7 @@ function swipeToRemove(li, onRemove, extra = null) {
     swiped = true;
     const flick = Math.abs(velocity) > 0.4;
     if (armed && !(flick && velocity > 0)) {
-      move(-li.offsetWidth, true);
+      move(-rowWidth(), true);
       setTimeout(remove, 220);
     } else if (flick ? velocity < 0 : offset < -OPEN / 2 && offset - base < 12) {
       move(-OPEN, true);
@@ -330,7 +341,8 @@ function swipeToRemove(li, onRemove, extra = null) {
       return;
     }
     armed = true;
-    move(-li.offsetWidth, true);
+    width = li.offsetWidth;
+    move(-width, true);
     setTimeout(remove, 220);
   });
   if (alt) {
