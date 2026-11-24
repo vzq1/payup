@@ -336,14 +336,20 @@ a.btn { text-decoration: none; }
   min-height: 64px; padding: 12px 0;
 }
 .row.swipe.moving .swipe-inner { background: var(--row-bg, var(--bg)); will-change: transform; }
-.row.swipe:not(.moving) .swipe-action { visibility: hidden; }
+.row.swipe:not(.moving) .swipe-actions { visibility: hidden; }
 .swipe-inner:active { opacity: .55; transition: opacity 0s 90ms; }
 .row.swipe.dragged .swipe-inner, .row.swipe.moving .swipe-inner { opacity: 1; }
 .sheet { --row-bg: var(--sheet); }
-.swipe-action {
-  position: absolute; top: 0; right: 0; bottom: 0; width: 88px;
-  background: var(--danger); color: var(--on-danger); font-size: 15px; font-weight: 600;
+.swipe-actions { position: absolute; inset: 0; pointer-events: none; }
+.swipe-btn {
+  position: absolute; top: 50%; right: 0; width: 44px; height: 44px; margin-top: -22px;
+  display: flex; align-items: center; justify-content: center; overflow: hidden;
+  border-radius: 999px; color: #FFFFFF; pointer-events: auto;
+  transform-origin: right center; will-change: transform, width;
 }
+.swipe-action { background: var(--danger); }
+.swipe-alt { background: #0A84FF; transform-origin: center; }
+.swipe-btn svg { flex: none; }
 
 /* + button and the step-by-step guide */
 .fab {

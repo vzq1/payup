@@ -157,7 +157,8 @@ function el(tag, props = {}, children = []) {
   return node;
 }
 
-// Slide a row left to reveal Remove; slide all the way to remove it straight away.
+// Slide a row left, like Apple Notes: round buttons grow in behind the row, and
+// dragging further stretches the red one until it takes over and deletes the row.
 // Touch uses touch events so the row can stop the page from scrolling once the
 // slide is clearly sideways; a mouse uses pointer events.
 let openSwipe = null;
@@ -165,34 +166,72 @@ document.addEventListener("pointerdown", (e) => {
   if (openSwipe && !openSwipe.li.contains(e.target)) openSwipe.close();
 }, true);
 
-function swipeToRemove(li, onRemove) {
-  const ACTION = 88;
+const TRASH_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/></svg>';
+const SHARE_ICON = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7.5 7.5 12 3l4.5 4.5M5 12v6a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6"/></svg>';
+
+function swipeToRemove(li, onRemove, extra = null) {
+  const BTN = 44, GAP = 8, EDGE = 12;
+  const OPEN = EDGE + BTN + (extra ? BTN + GAP : 0);
   const inner = el("div", { class: "swipe-inner" });
   while (li.firstChild) inner.append(li.firstChild);
-  const action = el("button", { type: "button", class: "swipe-action", text: "Remove", tabindex: "-1", "aria-hidden": "true" });
+  const action = el("button", { type: "button", class: "swipe-btn swipe-action", tabindex: "-1", "aria-label": "Remove" });
+  action.innerHTML = TRASH_ICON;
+  const alt = extra ? el("button", { type: "button", class: "swipe-btn swipe-alt", tabindex: "-1", "aria-label": extra.label }) : null;
+  if (alt) alt.innerHTML = SHARE_ICON;
+  const actions = el("div", { class: "swipe-actions" }, [alt, action]);
   li.classList.add("swipe");
-  li.append(action, inner);
+  li.append(actions, inner);
 
   let startX = 0, startY = 0, offset = 0, base = 0, tracking = false, horizontal = null, swiped = false;
-  let settle = 0, frame = 0, target = 0, lastX = 0, lastT = 0, velocity = 0;
+  let settle = 0, frame = 0, target = 0, lastX = 0, lastT = 0, velocity = 0, armed = false;
+  const armAt = () => Math.max(OPEN + 60, li.offsetWidth * 0.6);
+
+  // Lay out the buttons for how far the row is open.
   const paint = () => {
     frame = 0;
+    const reveal = Math.max(0, -target);
     inner.style.transform = target ? `translate3d(${target}px,0,0)` : "";
+    const grow = Math.min(1, reveal / OPEN);
+    const scale = 0.35 + 0.65 * grow;
+    const fade = Math.min(1, grow * 1.6);
+    const red = armed ? Math.max(BTN, reveal - EDGE) : BTN + Math.max(0, reveal - OPEN);
+    action.style.width = `${red}px`;
+    action.style.transform = `scale(${scale})`;
+    action.style.opacity = fade;
+    if (alt) {
+      alt.style.transform = `translateX(${-(BTN + GAP + Math.max(0, reveal - OPEN))}px) scale(${armed ? 0.6 : scale})`;
+      alt.style.opacity = armed ? 0 : fade;
+    }
+  };
+  const setTransitions = (value) => {
+    inner.style.transition = value;
+    action.style.transition = value && value !== "none" ? value.replace("transform", "transform") + ", width 240ms var(--ease-out), opacity 200ms ease" : value;
+    if (alt) alt.style.transition = action.style.transition;
   };
   const move = (x, animate) => {
     offset = x;
     target = x;
     clearTimeout(settle);
+    const wasArmed = armed;
+    armed = x < 0 && -x > armAt();
     if (x) li.classList.add("moving");
-    else if (animate) settle = setTimeout(() => { li.classList.remove("moving"); inner.style.transition = ""; }, 260);
-    else { li.classList.remove("moving"); inner.style.transition = ""; }
+    const clear = () => { li.classList.remove("moving"); setTransitions(""); };
+    if (!x) {
+      if (animate) settle = setTimeout(clear, 260);
+      else clear();
+    }
     if (animate) {
       if (frame) cancelAnimationFrame(frame);
       frame = 0;
-      inner.style.transition = "transform 240ms var(--ease-out)";
+      setTransitions("transform 240ms var(--ease-out)");
       paint();
     } else if (x) {
-      inner.style.transition = "none";
+      setTransitions("none");
+      // crossing the delete point snaps the buttons, so let just that change animate
+      if (wasArmed !== armed) {
+        action.style.transition = "width 180ms var(--ease-out), opacity 150ms ease";
+        if (alt) alt.style.transition = "transform 180ms var(--ease-out), opacity 150ms ease";
+      }
       if (!frame) frame = requestAnimationFrame(paint);
     } else {
       if (frame) cancelAnimationFrame(frame);
@@ -203,6 +242,7 @@ function swipeToRemove(li, onRemove) {
   const remove = () => {
     if (openSwipe === api) openSwipe = null;
     onRemove();
+    armed = false;
     move(0, false);
   };
 
@@ -227,7 +267,11 @@ function swipeToRemove(li, onRemove) {
     const now = performance.now();
     if (now > lastT) velocity = 0.7 * ((x - lastX) / (now - lastT)) + 0.3 * velocity;
     lastX = x; lastT = now;
-    move(Math.min(0, base + dx), false);
+    let next = base + dx;
+    // a little resistance past the edge of the row
+    const width = li.offsetWidth;
+    if (next < -width) next = -width - (-width - next) * 0.25;
+    move(Math.min(0, next), false);
     return true;
   };
   const end = () => {
@@ -235,13 +279,12 @@ function swipeToRemove(li, onRemove) {
     if (!tracking || !horizontal) { tracking = false; return; }
     tracking = false;
     swiped = true;
-    const width = li.offsetWidth;
     const flick = Math.abs(velocity) > 0.4;
-    if (offset < -width * 0.55 && !(flick && velocity > 0)) {
-      move(-width, true);
+    if (armed && !(flick && velocity > 0)) {
+      move(-li.offsetWidth, true);
       setTimeout(remove, 220);
-    } else if (flick ? velocity < 0 : offset < -ACTION / 2 && offset - base < 12) {
-      move(-ACTION, true);
+    } else if (flick ? velocity < 0 : offset < -OPEN / 2 && offset - base < 12) {
+      move(-OPEN, true);
       openSwipe = api;
     } else {
       api.close();
@@ -272,7 +315,7 @@ function swipeToRemove(li, onRemove) {
 
   // a swipe, or a tap on a row that's slid open, shouldn't also open the row
   li.addEventListener("click", (e) => {
-    if (action.contains(e.target)) return;
+    if (actions.contains(e.target)) return;
     if (swiped || offset !== 0) {
       e.stopImmediatePropagation();
       e.preventDefault();
@@ -286,8 +329,21 @@ function swipeToRemove(li, onRemove) {
       swiped = false;
       return;
     }
-    remove();
+    armed = true;
+    move(-li.offsetWidth, true);
+    setTimeout(remove, 220);
   });
+  if (alt) {
+    alt.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (swiped) {
+        swiped = false;
+        return;
+      }
+      api.close();
+      extra.onClick();
+    });
+  }
   return li;
 }
 
@@ -411,7 +467,7 @@ function renderPeople(result) {
       el("span", { class: "row-amount num", text: peso.format(r.total) }),
     ]);
     onActivate(li, () => openPersonSheet(r.id));
-    swipeToRemove(li, () => removePerson(r.id));
+    swipeToRemove(li, () => removePerson(r.id), isPayerId(r.id) ? null : { label: `Send ${r.name} a GCash link`, onClick: () => sendGcashLink(r.id) });
     return li;
   });
 
