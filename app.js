@@ -187,64 +187,67 @@ function swipeToRemove(li, onRemove, extra = null) {
   li.append(actions, inner);
 
   let startX = 0, startY = 0, offset = 0, base = 0, tracking = false, horizontal = null, swiped = false;
-  let settle = 0, frame = 0, target = 0, lastX = 0, lastT = 0, velocity = 0, armed = false, armTimer = 0;
+  let settle = 0, frame = 0, target = 0, lastX = 0, lastT = 0, velocity = 0, armed = false;
   let width = 0;
   const rowWidth = () => width || (width = li.offsetWidth);
   const armAt = () => Math.max(OPEN + 60, rowWidth() * 0.6);
 
-  // Lay out the buttons for how far the row is open.
-  const paint = () => {
+  // Lay out the buttons for how far the row is open. "mix" eases between the
+  // normal layout (0) and the delete layout (1) so crossing the delete point glides.
+  let mix = 0, mixTime = 0;
+  const paint = (now = performance.now()) => {
     frame = 0;
+    const goal = armed ? 1 : 0;
+    if (mix !== goal) {
+      const dt = mixTime ? Math.min(64, now - mixTime) : 16;
+      mix += (goal - mix) * (1 - Math.exp(-dt / 55));
+      if (Math.abs(goal - mix) < 0.01) mix = goal;
+    }
+    mixTime = mix === goal ? 0 : now;
     const reveal = Math.max(0, -target);
     inner.style.transform = target ? `translate3d(${target}px,0,0)` : "";
     const grow = Math.min(1, reveal / OPEN);
     const scale = 0.35 + 0.65 * grow;
     const fade = Math.min(1, grow * 1.6);
-    const stretch = armed ? Math.max(0, reveal - EDGE - BTN) : Math.max(0, reveal - OPEN);
+    const loose = Math.max(0, reveal - OPEN);
+    const full = Math.max(0, reveal - EDGE - BTN);
+    const stretch = loose + (full - loose) * mix;
     action.style.transform = `scale(${scale})`;
     action.style.opacity = fade;
     capL.style.transform = `translate3d(${-stretch}px,0,0)`;
     mid.style.transform = `scaleX(${stretch + 2})`;
     icon.style.transform = `translate3d(${-stretch / 2}px,0,0)`;
     if (alt) {
-      alt.style.transform = `translate3d(${-(BTN + GAP + Math.max(0, reveal - OPEN))}px,0,0) scale(${armed ? 0.6 : scale})`;
-      alt.style.opacity = armed ? 0 : fade;
+      alt.style.transform = `translate3d(${-(BTN + GAP + loose)}px,0,0) scale(${scale * (1 - 0.45 * mix)})`;
+      alt.style.opacity = fade * (1 - mix);
     }
+    if (mixTime && !frame) frame = requestAnimationFrame(paint);
   };
-  const motion = (mode) => {
-    li.classList.toggle("swipe-anim", mode === "anim");
-    li.classList.toggle("swipe-arm", mode === "arm");
-  };
+  const motion = (on) => li.classList.toggle("swipe-anim", on);
   const move = (x, animate) => {
     offset = x;
     target = x;
     clearTimeout(settle);
-    const wasArmed = armed;
     armed = x < 0 && -x > armAt();
     if (x) li.classList.add("moving");
     if (!x) {
-      const clear = () => { li.classList.remove("moving"); motion(null); width = 0; };
+      const clear = () => { li.classList.remove("moving"); motion(false); width = 0; };
       if (animate) settle = setTimeout(clear, 260);
       else clear();
     }
     if (animate) {
+      // CSS eases the whole thing, so jump the blend straight to its end
       if (frame) cancelAnimationFrame(frame);
       frame = 0;
-      clearTimeout(armTimer);
-      motion("anim");
+      mix = armed ? 1 : 0;
+      motion(true);
       paint();
     } else if (x) {
-      // crossing the delete point snaps the pill, so let that one change ease in
-      if (wasArmed !== armed) {
-        motion("arm");
-        clearTimeout(armTimer);
-        armTimer = setTimeout(() => motion(null), 200);
-      } else if (!li.classList.contains("swipe-arm")) {
-        motion(null);
-      }
+      motion(false);
       if (!frame) frame = requestAnimationFrame(paint);
     } else {
       if (frame) cancelAnimationFrame(frame);
+      mix = 0;
       paint();
     }
   };
